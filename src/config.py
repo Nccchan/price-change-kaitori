@@ -30,6 +30,15 @@ SHEET_COLUMNS = {
     "header_rows": 1, # 先頭1行はヘッダー
 }
 
+# ゲーム別列オーバーライド
+# ポケモン以外のシートは現在 D列(price2_col)のみに価格が入っているため
+# price1_col と price2_col を入れ替えて BOX価格を price_1 として読み込む
+SHEET_COLUMNS_OVERRIDE = {
+    "onepiece":    {**SHEET_COLUMNS, "price1_col": 3, "price2_col": 2},
+    "dragonball":  {**SHEET_COLUMNS, "price1_col": 3, "price2_col": 2},
+    "yugioh":      {**SHEET_COLUMNS, "price1_col": 3, "price2_col": 2},
+}
+
 # ==============================
 # マージン設定（円）
 # ==============================

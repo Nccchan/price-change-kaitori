@@ -14,6 +14,7 @@ from src.config import (
     SPREADSHEET_ID,
     SHEET_NAMES,
     SHEET_COLUMNS,
+    SHEET_COLUMNS_OVERRIDE,
     GOOGLE_CREDENTIALS_PATH,
 )
 from src.models import CardItem, GameType
@@ -50,6 +51,8 @@ class GVizReader:
         sheet_name = SHEET_NAMES.get(game)
         if not sheet_name:
             raise ValueError(f"Unknown game: {game}")
+
+        self._current_cols = SHEET_COLUMNS_OVERRIDE.get(game, SHEET_COLUMNS)
 
         try:
             return self._read_via_gviz(sheet_name)
@@ -104,11 +107,12 @@ class GVizReader:
         return self._parse_rows(rows)
 
     def _parse_rows(self, rows: list) -> List[CardItem]:
-        header_rows = SHEET_COLUMNS["header_rows"]
-        name_col = SHEET_COLUMNS["name_col"]
-        code_col = SHEET_COLUMNS["code_col"]
-        price1_col = SHEET_COLUMNS["price1_col"]
-        price2_col = SHEET_COLUMNS["price2_col"]
+        cols = getattr(self, "_current_cols", SHEET_COLUMNS)
+        header_rows = cols["header_rows"]
+        name_col = cols["name_col"]
+        code_col = cols["code_col"]
+        price1_col = cols["price1_col"]
+        price2_col = cols["price2_col"]
 
         items: List[CardItem] = []
         for row_idx, row in enumerate(rows):

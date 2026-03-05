@@ -9,6 +9,7 @@
   python main.py -i macho_db.jpg -g dragonball --dry-run
   python main.py -i img1.png -i img2.png -g onepiece -d 3/3 --yes
   python main.py -i homura.png -g onepiece --margin-box 300 --margin-carton 1500
+  python main.py --from-json data/homura_3_5_pokemon.json -g pokemon -d 3/5 --dry-run
 """
 import sys
 import os
@@ -24,9 +25,15 @@ load_dotenv()
 @click.option(
     "--image", "-i",
     multiple=True,
-    required=True,
+    required=False,
     metavar="PATH_OR_URL",
     help="競合価格表画像ファイルパスまたはURL（複数指定可）",
+)
+@click.option(
+    "--from-json",
+    default=None,
+    metavar="FILE",
+    help="解析済みJSONファイルから競合データを読み込む（画像解析をスキップ）",
 )
 @click.option(
     "--game", "-g",
@@ -86,6 +93,7 @@ load_dotenv()
 )
 def main(
     image: tuple,
+    from_json: Optional[str],
     game: str,
     date: Optional[str],
     competitor: Optional[str],
@@ -108,6 +116,10 @@ def main(
     from src.report_generator import ReportGenerator
     from src.sheets_writer import SheetsWriter
     from src.models import GameType, CompetitorType
+
+    if not image and not from_json:
+        click.echo("[ERROR] --image (-i) または --from-json のどちらかを指定してください。", err=True)
+        sys.exit(1)
 
     sid = spreadsheet_id or SPREADSHEET_ID
     game = game.lower()
@@ -132,28 +144,39 @@ def main(
     click.echo()
 
     # ------------------------------------------------------------------
-    # Step 1: 競合画像を解析
+    # Step 1: 競合価格データを取得（画像解析 or JSONファイル）
     # ------------------------------------------------------------------
-    click.echo("【Step 1】 競合価格表画像を解析中...")
     analyzer = ImageAnalyzer()
-    try:
-        if len(image) == 1:
-            competitor_data = analyzer.analyze(
-                image[0],
-                game_hint=game,
-                competitor_hint=competitor,
-                date_hint=date,
-            )
-        else:
-            competitor_data = analyzer.analyze_multiple(
-                list(image),
-                game_hint=game,
-                competitor_hint=competitor,
-                date_hint=date,
-            )
-    except Exception as e:
-        click.echo(f"\n[ERROR] 画像解析に失敗しました: {e}", err=True)
-        sys.exit(1)
+    if from_json:
+        click.echo(f"【Step 1】 JSONファイルから競合データを読み込み中: {from_json}")
+        try:
+            import json as _json
+            with open(from_json, encoding="utf-8") as _f:
+                _data = _json.load(_f)
+            competitor_data = analyzer._build_competitor_data(_data, game, competitor, date)
+        except Exception as e:
+            click.echo(f"\n[ERROR] JSONファイルの読み込みに失敗しました: {e}", err=True)
+            sys.exit(1)
+    else:
+        click.echo("【Step 1】 競合価格表画像を解析中...")
+        try:
+            if len(image) == 1:
+                competitor_data = analyzer.analyze(
+                    image[0],
+                    game_hint=game,
+                    competitor_hint=competitor,
+                    date_hint=date,
+                )
+            else:
+                competitor_data = analyzer.analyze_multiple(
+                    list(image),
+                    game_hint=game,
+                    competitor_hint=competitor,
+                    date_hint=date,
+                )
+        except Exception as e:
+            click.echo(f"\n[ERROR] 画像解析に失敗しました: {e}", err=True)
+            sys.exit(1)
 
     competitor_name = COMPETITOR_NAMES.get(competitor_data.competitor.value, competitor_data.competitor.value)
     click.echo(f"  完了: {competitor_name} / {len(competitor_data.items)} 商品を抽出")

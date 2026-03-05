@@ -12,29 +12,72 @@ def _normalize_key(name: str, code: str) -> str:
     return f"{name.strip()}|{code.strip()}"
 
 
+def _normalize_name(s: str) -> str:
+    """商品名の表記ゆれを吸収する正規化（カッコ・スペース・大小文字統一）"""
+    import re
+    s = s.strip()
+    # 全角カッコ→半角
+    s = s.replace("（", "(").replace("）", ")")
+    # スペース除去
+    s = re.sub(r"\s+", "", s)
+    # アルファベット小文字化
+    s = s.lower()
+    # Pokémon → pokemon
+    s = s.replace("é", "e")
+    return s
+
+
 def _find_match(
     competitor_item: CardItem,
     current_items: List[CardItem],
 ) -> Optional[CardItem]:
     """
     競合データのアイテムに対応する現行シートのアイテムを探す。
-    優先順位: (1) 商品名+型式 完全一致 → (2) 型式 一致 → (3) 商品名 一致
+    優先順位:
+      (1) 商品名+型式 完全一致
+      (2) 型式 一致
+      (3) 商品名 一致
+      (4) 競合名 ≡ 現行コード（スプレッドシートが名前をB列に格納している場合）
+      (5) 表記ゆれ吸収（全角括弧・スペース）で再試行
     """
+    comp_name = competitor_item.name.strip() if competitor_item.name else ""
+    comp_code = competitor_item.code.strip() if competitor_item.code else ""
+
     # (1) 両方一致
     for item in current_items:
         if item.name == competitor_item.name and item.code == competitor_item.code:
             return item
 
     # (2) 型式が一致（空でない場合のみ）
-    if competitor_item.code:
+    if comp_code:
         for item in current_items:
-            if item.code and item.code.strip() == competitor_item.code.strip():
+            if item.code and item.code.strip() == comp_code:
                 return item
 
     # (3) 商品名が一致
-    if competitor_item.name:
+    if comp_name:
         for item in current_items:
-            if item.name and item.name.strip() == competitor_item.name.strip():
+            if item.name and item.name.strip() == comp_name:
+                return item
+
+    # (4) 競合の商品名 ≡ 現行のコード列（スプレッドシートが名前をB列に格納）
+    if comp_name:
+        for item in current_items:
+            if item.code and item.code.strip() == comp_name:
+                return item
+
+    # (5) 表記ゆれ吸収（全角括弧・空白）
+    norm_comp = _normalize_name(comp_name)
+    if norm_comp:
+        for item in current_items:
+            cur_name = _normalize_name(item.name or "")
+            cur_code = _normalize_name(item.code or "")
+            if norm_comp in (cur_name, cur_code):
+                return item
+        # 前方一致（「熱風のアリーナ(プロモ無し)」→「熱風のアリーナ」）
+        for item in current_items:
+            cur_code = _normalize_name(item.code or "")
+            if cur_code and (norm_comp.startswith(cur_code) or cur_code.startswith(norm_comp)):
                 return item
 
     return None
