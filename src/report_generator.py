@@ -4,7 +4,7 @@
 from typing import List, Optional
 
 from src.config import COMPETITOR_NAMES, PRICE_LABELS, LARGE_CHANGE_THRESHOLD
-from src.models import ComparisonResult, CompetitorData, GameType
+from src.models import ComparisonResult, CompetitorData, DailyChangeResult, GameType
 
 
 def _fmt(price: Optional[int]) -> str:
@@ -270,4 +270,74 @@ class ReportGenerator:
                 f"| {_fmt(r.recommended_price_2)} "
                 f"| {change_arrow(r.current_price_2, r.recommended_price_2)} |"
             )
+        return "\n".join(lines)
+
+    def generate_daily_report(
+        self,
+        daily_results: List[DailyChangeResult],
+        labels: dict,
+        prev_date: str,
+        curr_date: str,
+        threshold: float = 0.05,
+    ) -> str:
+        """
+        前日比較レポートを生成する。
+        5%以上の変動がある商品を「確認事項」として強調表示する。
+        """
+        p1 = labels["price1"]
+        p2 = labels["price2"]
+
+        changed = [r for r in daily_results if r.changed]
+        significant = [r for r in daily_results if r.is_significant]
+
+        if not changed:
+            return (
+                f"## 📊 前日比較（{prev_date} → {curr_date}）\n"
+                "前日から変動のある商品はありませんでした。"
+            )
+
+        lines = [
+            f"## 📊 前日比較（{prev_date} → {curr_date}）",
+            f"変動: {len(changed)} 商品 / うち **5%以上: {len(significant)} 商品**",
+            "",
+        ]
+
+        # 確認事項（5%以上変動）
+        if significant:
+            lines += [
+                "### ⚠️ 確認事項（5%以上の価格変動）",
+                "",
+                f"| 商品名 | 型式 | 前日{p1} | 今日{p1} | 変動率 | 前日{p2} | 今日{p2} | 変動率 |",
+                "|--------|------|----------|----------|--------|----------|----------|--------|",
+            ]
+            for r in significant:
+                def pct_str(pct):
+                    if pct is None:
+                        return "—"
+                    sign = "▲" if pct > 0 else "▼"
+                    return f"**{sign}{abs(pct)*100:.1f}%**"
+
+                lines.append(
+                    f"| {r.name} | {r.code} "
+                    f"| {_fmt(r.prev_price_1)} | {_fmt(r.curr_price_1)} | {pct_str(r.change_pct_1)} "
+                    f"| {_fmt(r.prev_price_2)} | {_fmt(r.curr_price_2)} | {pct_str(r.change_pct_2)} |"
+                )
+            lines.append("")
+
+        # 全変動リスト（5%未満含む）
+        minor = [r for r in changed if not r.is_significant]
+        if minor:
+            lines += [
+                "### 📋 その他の変動（5%未満）",
+                "",
+                f"| 商品名 | 型式 | 前日{p1} | 今日{p1} | 前日{p2} | 今日{p2} |",
+                "|--------|------|----------|----------|----------|----------|",
+            ]
+            for r in minor:
+                lines.append(
+                    f"| {r.name} | {r.code} "
+                    f"| {_fmt(r.prev_price_1)} | {_fmt(r.curr_price_1)} "
+                    f"| {_fmt(r.prev_price_2)} | {_fmt(r.curr_price_2)} |"
+                )
+
         return "\n".join(lines)

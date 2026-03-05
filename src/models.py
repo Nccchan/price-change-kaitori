@@ -159,6 +159,45 @@ class ComparisonResult:
 
 
 @dataclass
+class DailyChangeResult:
+    """競合価格の前日比較結果（1商品）"""
+    name: str
+    code: str
+    prev_price_1: Optional[int]
+    curr_price_1: Optional[int]
+    prev_price_2: Optional[int]
+    curr_price_2: Optional[int]
+
+    def _pct(self, prev: Optional[int], curr: Optional[int]) -> Optional[float]:
+        if prev and curr:
+            return (curr - prev) / prev
+        return None
+
+    @property
+    def change_pct_1(self) -> Optional[float]:
+        return self._pct(self.prev_price_1, self.curr_price_1)
+
+    @property
+    def change_pct_2(self) -> Optional[float]:
+        return self._pct(self.prev_price_2, self.curr_price_2)
+
+    @property
+    def is_significant(self) -> bool:
+        """5%以上の変動があるか"""
+        return abs(self.change_pct_1 or 0) >= 0.05 or abs(self.change_pct_2 or 0) >= 0.05
+
+    @property
+    def changed(self) -> bool:
+        return (
+            (self.prev_price_1 != self.curr_price_1 and
+             (self.prev_price_1 is not None or self.curr_price_1 is not None))
+            or
+            (self.prev_price_2 != self.curr_price_2 and
+             (self.prev_price_2 is not None or self.curr_price_2 is not None))
+        )
+
+
+@dataclass
 class UpdatePayload:
     """スプレッドシート更新用データ"""
     row_index: int       # 行番号（1始まり、ヘッダー含む）

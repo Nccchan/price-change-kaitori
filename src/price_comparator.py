@@ -4,7 +4,7 @@
 from typing import List, Optional, Dict, Tuple
 
 from src.config import MARGINS, PRICE_LABELS
-from src.models import CardItem, CompetitorData, ComparisonResult, UpdatePayload
+from src.models import CardItem, CompetitorData, ComparisonResult, DailyChangeResult, UpdatePayload
 
 
 def _normalize_key(name: str, code: str) -> str:
@@ -81,6 +81,36 @@ def _find_match(
                 return item
 
     return None
+
+
+def compare_daily(
+    current: CompetitorData,
+    prev: CompetitorData,
+) -> List[DailyChangeResult]:
+    """
+    今日と前日の競合価格データを比較して変動リストを返す。
+    """
+    prev_map: Dict[str, CardItem] = {}
+    for item in prev.items:
+        key = _normalize_name(item.name or item.code or "")
+        if key:
+            prev_map[key] = item
+
+    results: List[DailyChangeResult] = []
+    for item in current.items:
+        key = _normalize_name(item.name or item.code or "")
+        prev_item = prev_map.get(key)
+        results.append(
+            DailyChangeResult(
+                name=item.name,
+                code=item.code,
+                prev_price_1=prev_item.price_1 if prev_item else None,
+                curr_price_1=item.price_1,
+                prev_price_2=prev_item.price_2 if prev_item else None,
+                curr_price_2=item.price_2,
+            )
+        )
+    return results
 
 
 class PriceComparator:

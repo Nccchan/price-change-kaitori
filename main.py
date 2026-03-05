@@ -21,6 +21,39 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _find_previous_json(current_path: str, game: str) -> Optional[str]:
+    """
+    同じ競合・ゲームの前回データJSONを探す。
+    同じディレクトリにある `{competitor}_*_{game}.json` のうち、
+    現在のファイルを除いて最も新しいファイルを返す。
+    """
+    import glob
+    import re
+    current_path = os.path.abspath(current_path)
+    directory = os.path.dirname(current_path)
+    current_name = os.path.basename(current_path)
+
+    # ファイル名から競合名を推定: {competitor}_{date...}_{game}.json
+    # 例: homura_3_5_pokemon.json → competitor=homura, game=pokemon
+    pattern_str = rf"^(.+?)_(.+)_{re.escape(game)}\.json$"
+    m = re.match(pattern_str, current_name)
+    if not m:
+        return None
+    competitor_key = m.group(1)
+
+    # 同じ competitor + game のファイルを列挙
+    glob_pattern = os.path.join(directory, f"{competitor_key}_*_{game}.json")
+    candidates = [
+        p for p in glob.glob(glob_pattern)
+        if os.path.abspath(p) != current_path
+    ]
+    if not candidates:
+        return None
+
+    # 最も更新日時が新しいものを返す
+    return max(candidates, key=os.path.getmtime)
+
+
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option(
     "--image", "-i",
@@ -112,7 +145,7 @@ def main(
     from src.config import SPREADSHEET_ID, MARGINS, PRICE_LABELS, COMPETITOR_NAMES
     from src.gviz_reader import GVizReader
     from src.image_analyzer import ImageAnalyzer
-    from src.price_comparator import PriceComparator
+    from src.price_comparator import PriceComparator, compare_daily
     from src.report_generator import ReportGenerator
     from src.sheets_writer import SheetsWriter
     from src.models import GameType, CompetitorType
@@ -209,6 +242,37 @@ def main(
     click.echo()
 
     # ------------------------------------------------------------------
+    # Step 3.5: 前日比較
+    # ------------------------------------------------------------------
+    daily_report_section = ""
+    if from_json:
+        prev_json_path = _find_previous_json(from_json, game)
+        if prev_json_path:
+            click.echo(f"  前日データを検出: {os.path.basename(prev_json_path)}")
+            try:
+                import json as _json2
+                with open(prev_json_path, encoding="utf-8") as _f2:
+                    _prev_data = _json2.load(_f2)
+                prev_competitor_data = analyzer._build_competitor_data(
+                    _prev_data, game, None, None
+                )
+                daily_results = compare_daily(competitor_data, prev_competitor_data)
+                significant_count = sum(1 for r in daily_results if r.is_significant)
+                click.echo(f"  前日比較: {len(daily_results)} 商品 / 5%以上変動: {significant_count} 商品")
+                reporter_tmp = ReportGenerator()
+                daily_report_section = reporter_tmp.generate_daily_report(
+                    daily_results=daily_results,
+                    labels=labels,
+                    prev_date=prev_competitor_data.date or "前日",
+                    curr_date=competitor_data.date or "本日",
+                )
+            except Exception as e:
+                click.echo(f"  [警告] 前日比較に失敗しました: {e}")
+        else:
+            click.echo("  前日データが見つかりませんでした（初回実行）")
+    click.echo()
+
+    # ------------------------------------------------------------------
     # Step 4: レポート生成
     # ------------------------------------------------------------------
     click.echo("【Step 4】 レポートを生成中...")
@@ -221,7 +285,10 @@ def main(
         margin_carton=effective_margin_carton,
     )
     change_summary = reporter.generate_change_summary(results, labels)
-    full_report = report + "\n\n" + change_summary
+    parts = [report, change_summary]
+    if daily_report_section:
+        parts.append(daily_report_section)
+    full_report = "\n\n".join(parts)
 
     if output:
         with open(output, "w", encoding="utf-8") as f:
