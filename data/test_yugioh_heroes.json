@@ -1,0 +1,9 @@
+{
+  "competitor": "homura_tokyo",
+  "game": "yugioh",
+  "date": "2026/03/05",
+  "items": [
+    {"name": "LIMIT OVER COLLECTION - THE HEROES -",                      "code": "heros",      "price_1": 13500, "price_2": 330000},
+    {"name": "LIMIT OVER COLLECTION - THE HEROES - スペシャルパック（特典）", "code": "heros-sppack", "price_1": 2500,  "price_2": null}
+  ]
+}
