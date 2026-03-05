@@ -11,6 +11,7 @@ load_dotenv()
 # ==============================
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID", "1PBMNNYHliomlgeNsvZgiccrfOWpIJbYPb9EMFtSAgdw")
 GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_PATH", "credentials.json")
+GAS_WEBHOOK_URL = os.getenv("GAS_WEBHOOK_URL", "")
 
 # シート名マッピング（ゲーム種別 → スプレッドシートのタブ名）
 SHEET_NAMES = {

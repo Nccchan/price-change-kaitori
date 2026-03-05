@@ -9,8 +9,53 @@ from src.config import (
     SHEET_NAMES,
     SHEET_COLUMNS,
     GOOGLE_CREDENTIALS_PATH,
+    GAS_WEBHOOK_URL,
 )
 from src.models import UpdatePayload
+
+
+class GasWriter:
+    """Google Apps Script Webhook 経由でスプレッドシートに書き込むクラス"""
+
+    def __init__(self, webhook_url: str = GAS_WEBHOOK_URL):
+        self.webhook_url = webhook_url
+
+    def write_prices(self, game: str, payloads: List[UpdatePayload]) -> int:
+        import requests as _req
+
+        sheet_name = SHEET_NAMES.get(game)
+        if not sheet_name:
+            raise ValueError(f"Unknown game: {game}")
+
+        price1_col = SHEET_COLUMNS["price1_col"] + 1
+        price2_col = SHEET_COLUMNS["price2_col"] + 1
+        name_col   = SHEET_COLUMNS["name_col"] + 1
+        code_col   = SHEET_COLUMNS["code_col"] + 1
+
+        updates = []
+        for p in payloads:
+            row = p.row_index
+            if p.is_new:
+                updates.append({"row": row, "col": name_col,   "value": p.name})
+                updates.append({"row": row, "col": code_col,   "value": p.code})
+            if p.new_price_1 is not None:
+                updates.append({"row": row, "col": price1_col, "value": p.new_price_1})
+            if p.new_price_2 is not None:
+                updates.append({"row": row, "col": price2_col, "value": p.new_price_2})
+
+        if not updates:
+            return 0
+
+        resp = _req.post(
+            self.webhook_url,
+            json={"sheet": sheet_name, "updates": updates},
+            timeout=60,
+        )
+        resp.raise_for_status()
+        result = resp.json()
+        if not result.get("ok"):
+            raise RuntimeError(f"GAS error: {result}")
+        return result.get("count", len(updates))
 
 
 def _col_letter(idx: int) -> str:

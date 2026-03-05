@@ -147,7 +147,7 @@ def main(
     from src.image_analyzer import ImageAnalyzer
     from src.price_comparator import PriceComparator, compare_daily
     from src.report_generator import ReportGenerator
-    from src.sheets_writer import SheetsWriter
+    from src.sheets_writer import SheetsWriter, GasWriter
     from src.models import GameType, CompetitorType
 
     if not image and not from_json:
@@ -316,9 +316,14 @@ def main(
             return
 
     click.echo("【Step 5】 スプレッドシートを更新中...")
-    writer = SheetsWriter(spreadsheet_id=sid)
-    try:
+    from src.config import GAS_WEBHOOK_URL
+    if GAS_WEBHOOK_URL:
+        writer = GasWriter(webhook_url=GAS_WEBHOOK_URL)
+        next_row = len(current_items) + 2
+    else:
+        writer = SheetsWriter(spreadsheet_id=sid)
         next_row = writer.get_next_available_row(game)
+    try:
         payloads = comparator.build_update_payloads(
             game=game,
             comparison_results=results,
