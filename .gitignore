@@ -1,0 +1,23 @@
+# 環境変数・認証ファイル
+.env
+credentials.json
+
+# 画像ファイル
+images/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# レポート出力
+*.md
+!README.md
+
+# OS
+.DS_Store
+Thumbs.db
