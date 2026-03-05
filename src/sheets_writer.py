@@ -48,12 +48,29 @@ class SheetsWriter:
 
         from googleapiclient.discovery import build
         from google.oauth2 import service_account
+        import google.auth.transport.requests
+        import requests as _requests
 
         creds = service_account.Credentials.from_service_account_file(
             self.credentials_path,
             scopes=["https://www.googleapis.com/auth/spreadsheets"],
         )
-        self._service = build("sheets", "v4", credentials=creds, cache_discovery=False)
+        # requestsベースのトランスポートでトークンを取得
+        auth_request = google.auth.transport.requests.Request(
+            session=_requests.Session()
+        )
+        creds.refresh(auth_request)
+
+        # discovery ドキュメントをキャッシュなしで取得
+        resp = _requests.get(
+            "https://sheets.googleapis.com/$discovery/rest?version=v4",
+            headers={"Authorization": f"Bearer {creds.token}"},
+            timeout=30,
+        )
+        resp.raise_for_status()
+
+        from googleapiclient.discovery import build_from_document
+        self._service = build_from_document(resp.text, credentials=creds)
         return self._service
 
     def write_prices(
