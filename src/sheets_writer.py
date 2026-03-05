@@ -27,21 +27,18 @@ class GasWriter:
         if not sheet_name:
             raise ValueError(f"Unknown game: {game}")
 
-        price1_col = SHEET_COLUMNS["price1_col"] + 1
-        price2_col = SHEET_COLUMNS["price2_col"] + 1
-        name_col   = SHEET_COLUMNS["name_col"] + 1
-        code_col   = SHEET_COLUMNS["code_col"] + 1
-
+        # 行番号ではなく商品名でマッチングする方式
         updates = []
         for p in payloads:
-            row = p.row_index
-            if p.is_new:
-                updates.append({"row": row, "col": name_col,   "value": p.name})
-                updates.append({"row": row, "col": code_col,   "value": p.code})
+            if not p.name:
+                continue
+            update = {"name": p.name}
             if p.new_price_1 is not None:
-                updates.append({"row": row, "col": price1_col, "value": p.new_price_1})
+                update["price1"] = p.new_price_1
             if p.new_price_2 is not None:
-                updates.append({"row": row, "col": price2_col, "value": p.new_price_2})
+                update["price2"] = p.new_price_2
+            if len(update) > 1:  # nameだけでなく価格もある場合のみ
+                updates.append(update)
 
         if not updates:
             return 0
