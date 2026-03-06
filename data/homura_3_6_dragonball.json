@@ -1,0 +1,9 @@
+{
+  "competitor": "homura_tokyo",
+  "game": "dragonball",
+  "date": "2026/03/06",
+  "items": [
+    {"name": "MANGA 02",                                          "code": "SB-02",   "price_1": 15000, "price_2": null},
+    {"name": "ドラゴンボールスーパーダイバーズ アドバンスパック",   "code": "DBSDA",   "price_1": 12500, "price_2": null}
+  ]
+}
