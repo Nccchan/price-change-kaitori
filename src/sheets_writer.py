@@ -35,9 +35,7 @@ class GasWriter:
             update = {"name": p.name}
             if p.new_price_1 is not None:
                 update["price1"] = p.new_price_1
-            if game == "pokemon":
-                update["price2"] = ""  # ポケモンはシュリンクなし列を常にクリア
-            elif p.new_price_2 is not None:
+            if p.new_price_2 is not None:
                 update["price2"] = p.new_price_2
             if len(update) > 1:  # nameだけでなく価格もある場合のみ
                 updates.append(update)
