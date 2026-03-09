@@ -336,6 +336,19 @@ def main(
         new_count = sum(1 for p in payloads if p.is_new)
         if new_count > 0:
             click.echo(f"  🆕 {new_count} 商品を新規追加しました")
+
+        # ポケモンシートのA1に書き込み日付を更新
+        if game == "pokemon" and isinstance(writer, GasWriter):
+            date_str = competitor_data.date or ""
+            if date_str:
+                try:
+                    ok = writer.write_date_cell(game, date_str)
+                    if ok:
+                        click.echo(f"  📅 A1セルに日付を書き込みました: {date_str}")
+                    else:
+                        click.echo(f"  ⚠️ A1セルの日付更新に失敗しました（GASが未対応の可能性）")
+                except Exception as e:
+                    click.echo(f"  ⚠️ A1セルの日付更新をスキップしました: {e}")
     except FileNotFoundError as e:
         click.echo(f"\n[ERROR] {e}", err=True)
         click.echo("\n[ヒント] credentials.json がない場合は --dry-run で比較レポートのみ確認できます。", err=True)

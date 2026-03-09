@@ -54,6 +54,21 @@ class GasWriter:
             raise RuntimeError(f"GAS error: {result}")
         return result.get("count", len(updates))
 
+    def write_date_cell(self, game: str, date_str: str) -> bool:
+        """シートのA1セルに日付を書き込む"""
+        import requests as _req
+        sheet_name = SHEET_NAMES.get(game)
+        if not sheet_name:
+            return False
+        resp = _req.post(
+            self.webhook_url,
+            json={"sheet": sheet_name, "setCell": {"address": "A1", "value": date_str}},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        result = resp.json()
+        return result.get("ok", False)
+
 
 def _col_letter(idx: int) -> str:
     """0始まり列インデックスをアルファベット列名に変換（例: 0→A, 26→AA）"""
