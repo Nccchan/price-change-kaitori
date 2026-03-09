@@ -62,7 +62,7 @@ class GasWriter:
             return False
         resp = _req.post(
             self.webhook_url,
-            json={"sheet": sheet_name, "setCell": {"address": "A1", "value": date_str}},
+            json={"sheet": sheet_name, "setCell": {"address": "A2", "value": date_str}},
             timeout=30,
         )
         resp.raise_for_status()
