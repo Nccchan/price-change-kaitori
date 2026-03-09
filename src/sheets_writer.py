@@ -55,19 +55,13 @@ class GasWriter:
         return result.get("count", len(updates))
 
     def write_date_cell(self, game: str, date_str: str) -> bool:
-        """シートのA1セルに日付を書き込む"""
-        import requests as _req
+        """シートのA2セルに日付をSheetsAPI経由で書き込む"""
         sheet_name = SHEET_NAMES.get(game)
         if not sheet_name:
             return False
-        resp = _req.post(
-            self.webhook_url,
-            json={"sheet": sheet_name, "setCell": {"address": "A2", "value": date_str}},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        result = resp.json()
-        return result.get("ok", False)
+        sw = SheetsWriter()
+        sw.write_cell(sheet_name, "A2", date_str)
+        return True
 
 
 def _col_letter(idx: int) -> str:
@@ -206,6 +200,17 @@ class SheetsWriter:
             .execute()
         )
         return result.get("totalUpdatedCells", 0)
+
+    def write_cell(self, sheet_name: str, cell_address: str, value: str) -> None:
+        """指定セルに値を書き込む（例: sheet_name='ポケモン', cell_address='A2'）"""
+        service = self._get_service()
+        body = {
+            "valueInputOption": "USER_ENTERED",
+            "data": [{"range": f"'{sheet_name}'!{cell_address}", "values": [[value]]}],
+        }
+        service.spreadsheets().values().batchUpdate(
+            spreadsheetId=self.spreadsheet_id, body=body
+        ).execute()
 
     def get_next_available_row(self, game: str) -> int:
         """
