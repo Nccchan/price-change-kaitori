@@ -1,0 +1,28 @@
+{
+  "competitor": "homura_tokyo",
+  "game": "onepiece",
+  "date": "2026/03/09",
+  "items": [
+    {"name": "ROMANCE DAWN",           "code": "OP-01",  "price_1": 25000, "price_2": 320000},
+    {"name": "頂上決戦",               "code": "OP-02",  "price_1": 14500, "price_2": 185000},
+    {"name": "強大な敵",               "code": "OP-03",  "price_1": 14000, "price_2": 175000},
+    {"name": "謀略の王国",             "code": "OP-04",  "price_1": 13500, "price_2": 168000},
+    {"name": "新時代の主役",            "code": "OP-05",  "price_1": 29500, "price_2": 375000},
+    {"name": "双璧の覇者",             "code": "OP-06",  "price_1": 13000, "price_2": 165000},
+    {"name": "500年後の未来",           "code": "OP-07",  "price_1": 7000,  "price_2": 90000},
+    {"name": "二つの伝説",             "code": "OP-08",  "price_1": 5000,  "price_2": 66000},
+    {"name": "新たなる皇帝",            "code": "OP-09",  "price_1": 8300,  "price_2": 112000},
+    {"name": "王族の血統",             "code": "OP-10",  "price_1": 5000,  "price_2": 68000},
+    {"name": "神速の拳",               "code": "OP-11",  "price_1": 14000, "price_2": 175000},
+    {"name": "師弟の絆",               "code": "OP-12",  "price_1": 7000,  "price_2": 88000},
+    {"name": "受け継がれる意志",        "code": "OP-13",  "price_1": 11000, "price_2": 145000},
+    {"name": "蒼海の七傑",             "code": "OP-14",  "price_1": 7000,  "price_2": 90000},
+    {"name": "神の島の冒険",            "code": "OP-15",  "price_1": 7000,  "price_2": 88000},
+    {"name": "メモリアルコレクション",   "code": "EB-01",  "price_1": 12300, "price_2": 155000},
+    {"name": "Anime 25th collection",  "code": "EB-02",  "price_1": 12200, "price_2": 155000},
+    {"name": "Heroines Edition",       "code": "EB-03",  "price_1": 10500, "price_2": 136000},
+    {"name": "EGGHEAD CRISIS",         "code": "EB-04",  "price_1": 6000,  "price_2": 82000},
+    {"name": "THE BEST vol.1",         "code": "PRB-01", "price_1": 10000, "price_2": 106000},
+    {"name": "THE BEST vol.2",         "code": "PRB-02", "price_1": 4400,  "price_2": 98000}
+  ]
+}
