@@ -17,6 +17,7 @@ venv/
 # レポート出力
 *.md
 !README.md
+!CLAUDE.md
 
 # OS
 .DS_Store
