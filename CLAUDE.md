@@ -82,9 +82,16 @@ git push -u origin claude/trading-card-price-updater-AoJuA
 | dragonball | BOX | カートン |
 | yugioh | BOX（price_1のみ使用） | — |
 
-## マージン設定（デフォルト）
+## マージン設定
 
+### ほむら東京（homura）
 - ポケモン: BOX +200円 / シュリンクなし +200円
 - ワンピース: BOX +200円 / カートン +1,000円
 - ドラゴンボール: BOX +200円 / カートン +1,000円
 - 遊戯王: BOX +200円
+
+### マッチョ（macho）
+- ワンピース: **BOX 同額（0円）/ カートン +1,000円**
+  ```bash
+  python main.py --from-json data/macho_MM_DD_onepiece.json -g onepiece --margin-box 0 --margin-carton 1000 --yes
+  ```
