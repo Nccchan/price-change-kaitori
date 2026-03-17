@@ -144,6 +144,17 @@ class HomuraFetcher:
         name = re.sub(r"^[「【].*?[」】]\s*", "", name)
         return name.strip()
 
+    def _extract_inline_code(self, name: str) -> tuple[Optional[str], str]:
+        """名前の先頭にある型式コード (OP-01, PRB-01, EB-01, FB-01 等) を抽出する。
+        例: "OP-01 ロマンスドーン" → ("OP-01", "ロマンスドーン")
+        例: "PRB-02ONE PIECE..." → ("PRB-02", "ONE PIECE...")
+        コードがなければ → (None, name)
+        """
+        m = re.match(r"^([A-Z]{1,3}-\d{2}[a-z]?)(?:\s|(?=[A-Z0-9]))(.*)", name, re.DOTALL)
+        if m:
+            return m.group(1), m.group(2).strip()
+        return None, name
+
     def _normalize(self, s: str) -> str:
         """比較用に正規化（全角→半角、小文字化、空白除去）"""
         return unicodedata.normalize("NFKC", s).lower().strip()
@@ -161,15 +172,23 @@ class HomuraFetcher:
             self._normalize(name): code for code, name in master.items()
         }
 
-        def resolve_code(name: str, raw_code: str) -> str:
-            return name_to_code.get(self._normalize(name), raw_code)
+        def resolve(name: str, raw_code: str) -> tuple[str, str]:
+            """(code, display_name) を返す"""
+            # 1) 名前の先頭に型式コードが含まれていればそれを使う (OP-01, FB-01 等)
+            inline_code, short_name = self._extract_inline_code(name)
+            if inline_code:
+                return inline_code, short_name
+            # 2) マスターデータの名称でルックアップ
+            code = name_to_code.get(self._normalize(name), raw_code)
+            return code, name
 
         def to_map(items: List[Dict]) -> Dict[str, Dict]:
             m: Dict[str, Dict] = {}
             for it in items:
-                key = self._normalize(it["name"])
-                code = resolve_code(it["name"], it["raw_code"])
-                m[key] = {"name": it["name"], "code": code, "price": it["price"]}
+                code, display_name = resolve(it["name"], it["raw_code"])
+                # マージのキーはコードが取れた場合はコード、なければ名前
+                key = self._normalize(code) if code != it["raw_code"] else self._normalize(display_name)
+                m[key] = {"name": display_name, "code": code, "price": it["price"]}
             return m
 
         p1_map = to_map(items_1)
