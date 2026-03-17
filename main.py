@@ -10,6 +10,7 @@
   python main.py -i img1.png -i img2.png -g onepiece -d 3/3 --yes
   python main.py -i homura.png -g onepiece --margin-box 300 --margin-carton 1500
   python main.py --from-json data/homura_3_5_pokemon.json -g pokemon -d 3/5 --dry-run
+  python main.py -g pokemon --fetch-web --competitor homura --dry-run
 """
 import sys
 import os
@@ -67,6 +68,12 @@ def _find_previous_json(current_path: str, game: str) -> Optional[str]:
     default=None,
     metavar="FILE",
     help="解析済みJSONファイルから競合データを読み込む（画像解析をスキップ）",
+)
+@click.option(
+    "--fetch-web",
+    is_flag=True,
+    default=False,
+    help="競合ウェブサイトから価格を自動取得（--image / --from-json の代替）",
 )
 @click.option(
     "--game", "-g",
@@ -127,6 +134,7 @@ def _find_previous_json(current_path: str, game: str) -> Optional[str]:
 def main(
     image: tuple,
     from_json: Optional[str],
+    fetch_web: bool,
     game: str,
     date: Optional[str],
     competitor: Optional[str],
@@ -150,8 +158,11 @@ def main(
     from src.sheets_writer import SheetsWriter, GasWriter
     from src.models import GameType, CompetitorType
 
-    if not image and not from_json:
-        click.echo("[ERROR] --image (-i) または --from-json のどちらかを指定してください。", err=True)
+    if not image and not from_json and not fetch_web:
+        click.echo(
+            "[ERROR] --image (-i) / --from-json / --fetch-web のいずれかを指定してください。",
+            err=True,
+        )
         sys.exit(1)
 
     sid = spreadsheet_id or SPREADSHEET_ID
@@ -170,17 +181,51 @@ def main(
     click.echo("=" * 60)
     click.echo(f"  ゲーム : {game}")
     click.echo(f"  マージン: {labels['price1']} +{effective_margin_box}円 / {labels['price2']} +{effective_margin_carton}円")
-    click.echo(f"  画像数 : {len(image)} ファイル")
+    if fetch_web:
+        click.echo(f"  入力   : ウェブ自動取得")
+    elif from_json:
+        click.echo(f"  入力   : JSONファイル ({from_json})")
+    else:
+        click.echo(f"  入力   : 画像 {len(image)} ファイル")
     if dry_run:
         click.echo("  モード : DRY-RUN（スプレッドシート更新なし）")
     click.echo("=" * 60)
     click.echo()
 
     # ------------------------------------------------------------------
-    # Step 1: 競合価格データを取得（画像解析 or JSONファイル）
+    # Step 1: 競合価格データを取得（ウェブ取得 / JSONファイル / 画像解析）
     # ------------------------------------------------------------------
     analyzer = ImageAnalyzer()
-    if from_json:
+    if fetch_web:
+        from src.homura_fetcher import HomuraFetcher
+        from src.models import GameType as _GameType
+
+        # 競合別フェッチャーを選択（現在はHomuraのみ実装済み）
+        comp = (competitor or "homura").lower()
+        if comp != "homura":
+            click.echo(f"[ERROR] --fetch-web は現在 homura のみ対応しています（指定: {comp}）", err=True)
+            sys.exit(1)
+
+        click.echo("【Step 1】 ほむら東京ウェブサイトから価格を取得中...")
+        try:
+            fetcher = HomuraFetcher()
+            game_type = _GameType.from_str(game)
+            competitor_data = fetcher.fetch(game_type, today=date)
+        except Exception as e:
+            click.echo(f"\n[ERROR] ウェブ取得に失敗しました: {e}", err=True)
+            sys.exit(1)
+
+        # データをJSONに保存（前日比較に利用可能にする）
+        import json as _json
+        import datetime as _dt
+        _today = _dt.date.today()
+        _json_path = f"data/homura_{_today.month}_{_today.day}_{game}.json"
+        os.makedirs("data", exist_ok=True)
+        with open(_json_path, "w", encoding="utf-8") as _jf:
+            _json.dump(fetcher.to_json(competitor_data), _jf, ensure_ascii=False, indent=2)
+        click.echo(f"  保存: {_json_path}")
+
+    elif from_json:
         click.echo(f"【Step 1】 JSONファイルから競合データを読み込み中: {from_json}")
         try:
             import json as _json
