@@ -1,0 +1,18 @@
+{
+  "competitor": "macho",
+  "game": "dragonball",
+  "date": "2026/03/20",
+  "items": [
+    {"name": "FB-01", "code": "FB-01", "price_1": 3800,  "price_2": 50000},
+    {"name": "FB-02", "code": "FB-02", "price_1": 3900,  "price_2": 50000},
+    {"name": "FB-03", "code": "FB-03", "price_1": 4800,  "price_2": 66000},
+    {"name": "FB-04", "code": "FB-04", "price_1": 4800,  "price_2": 66000},
+    {"name": "FB-05", "code": "FB-05", "price_1": 6200,  "price_2": 80000},
+    {"name": "FB-06", "code": "FB-06", "price_1": 5400,  "price_2": 70000},
+    {"name": "FB-07", "code": "FB-07", "price_1": 7500,  "price_2": 90000},
+    {"name": "FB-08", "code": "FB-08", "price_1": 4600,  "price_2": 62000},
+    {"name": "FB-09", "code": "FB-09", "price_1": 9100,  "price_2": 118000},
+    {"name": "SB-01", "code": "SB-01", "price_1": 29000, "price_2": null},
+    {"name": "SB-02", "code": "SB-02", "price_1": 16500, "price_2": null}
+  ]
+}
