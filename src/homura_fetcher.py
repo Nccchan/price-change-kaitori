@@ -30,6 +30,7 @@ class HomuraFetcher:
 
     def __init__(self) -> None:
         self.session = requests.Session()
+        self.session.trust_env = False  # 環境プロキシをバイパスして直接接続
         self.session.headers["User-Agent"] = (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
