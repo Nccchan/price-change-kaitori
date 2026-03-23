@@ -157,6 +157,8 @@ class PriceComparator:
                     required_margin_1=margin_box,
                     required_margin_2=margin_carton,
                     is_new=is_new,
+                    locked_1=current.locked_1 if current else False,
+                    locked_2=current.locked_2 if current else False,
                 )
             )
 

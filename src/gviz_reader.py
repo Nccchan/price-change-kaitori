@@ -129,8 +129,12 @@ class GVizReader:
             if not name and not code:
                 continue
 
-            price_1 = _parse_price(get_col(price1_col))
-            price_2 = _parse_price(get_col(price2_col))
+            raw_1 = get_col(price1_col)
+            raw_2 = get_col(price2_col)
+            locked_1 = raw_1.strip() == "準備中"
+            locked_2 = raw_2.strip() == "準備中"
+            price_1 = _parse_price(raw_1)
+            price_2 = _parse_price(raw_2)
 
             items.append(
                 CardItem(
@@ -139,6 +143,8 @@ class GVizReader:
                     price_1=price_1,
                     price_2=price_2,
                     row_index=row_idx + 1,  # 1始まり
+                    locked_1=locked_1,
+                    locked_2=locked_2,
                 )
             )
         return items
