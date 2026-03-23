@@ -66,6 +66,8 @@ class CardItem:
     price_1: Optional[int] = None  # BOX価格 or シュリンクあり価格
     price_2: Optional[int] = None  # カートン価格 or シュリンクなし価格
     row_index: Optional[int] = None  # スプレッドシートの行番号（1始まり）
+    locked_1: bool = False  # price_1 が「準備中」で書き換え禁止
+    locked_2: bool = False  # price_2 が「準備中」で書き換え禁止
 
     def display_price(self, price: Optional[int]) -> str:
         if price is None:
@@ -94,6 +96,8 @@ class ComparisonResult:
     required_margin_1: int
     required_margin_2: int
     is_new: bool = False  # スプレッドシートに存在しない新商品
+    locked_1: bool = False  # price_1 が「準備中」で書き換え禁止
+    locked_2: bool = False  # price_2 が「準備中」で書き換え禁止
 
     @property
     def diff_1(self) -> Optional[int]:
@@ -109,6 +113,8 @@ class ComparisonResult:
 
     @property
     def status_1(self) -> str:
+        if self.locked_1:
+            return "🔒"
         if self.competitor_price_1 is None:
             return "—"
         if self.diff_1 is None:
@@ -117,6 +123,8 @@ class ComparisonResult:
 
     @property
     def status_2(self) -> str:
+        if self.locked_2:
+            return "🔒"
         if self.competitor_price_2 is None:
             return "—"
         if self.diff_2 is None:
@@ -125,12 +133,16 @@ class ComparisonResult:
 
     @property
     def recommended_price_1(self) -> Optional[int]:
+        if self.locked_1:
+            return None
         if self.competitor_price_1 is not None:
             return self.competitor_price_1 + self.required_margin_1
         return None
 
     @property
     def recommended_price_2(self) -> Optional[int]:
+        if self.locked_2:
+            return None
         if self.competitor_price_2 is not None:
             return self.competitor_price_2 + self.required_margin_2
         return None
