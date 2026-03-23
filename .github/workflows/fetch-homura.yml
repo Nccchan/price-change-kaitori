@@ -1,10 +1,7 @@
-name: ホムラ価格自動取得
+name: ホムラ価格取得
 
 on:
-  schedule:
-    # 毎朝7時（日本時間）= 22:00 UTC
-    - cron: '0 22 * * *'
-  workflow_dispatch:  # 手動実行ボタン
+  workflow_dispatch:  # 手動実行のみ（GitHubのActionsタブ or Claude Code から起動）
 
 jobs:
   fetch:
