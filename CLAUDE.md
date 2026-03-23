@@ -2,40 +2,41 @@
 
 ## プロジェクト概要
 
-競合店（ほむら東京など）の買取価格表画像を解析し、自社スプレッドシートの買取価格を自動更新するツール。
+競合店（ほむら東京・マッチョ）の買取価格を解析し、自社スプレッドシートの買取価格を自動更新するツール。
+
+## 競合店の対応方式
+
+| 競合店 | 方式 | 備考 |
+|--------|------|------|
+| ほむら東京（homura） | **ウェブ自動取得** | GitHub Actions で毎日自動実行 |
+| マッチョ（macho） | **画像貼り付け** | ウェブサイトなし。画像を渡してAI解析 |
 
 ## 日次ルーティン
 
-毎日の更新は以下の流れで行う。
+### ほむら東京（homura）
 
-### 1. JSONファイルを手動作成
+GitHub Actions の「ホムラ価格取得」ワークフローが自動実行する。
+手動トリガーする場合は Actions タブ → `ホムラ価格取得` → Run workflow。
 
-画像を見て各ゲームの `data/homura_MM_DD_GAME.json` を作成する。
-前日のJSONをコピーして差分だけ修正するのが効率的。
+自動実行されると `data/homura_MM_DD_GAME.json` が生成・コミットされる。
 
-```
-data/homura_3_12_pokemon.json
-data/homura_3_12_onepiece.json
-data/homura_3_12_yugioh.json
-data/homura_3_12_dragonball.json
-```
+### マッチョ（macho）
 
-### 2. 全ゲームを順番に実行
+画像を貼り付けてAIに解析させ、JSONを生成→スプレッドシート更新する。
 
 ```bash
-python main.py --from-json data/homura_MM_DD_pokemon.json -g pokemon --yes
-python main.py --from-json data/homura_MM_DD_onepiece.json -g onepiece --yes
-python main.py --from-json data/homura_MM_DD_yugioh.json -g yugioh --yes
-python main.py --from-json data/homura_MM_DD_dragonball.json -g dragonball --yes
+python main.py -i macho_MM_DD_onepiece.jpg -g onepiece --yes
+python main.py -i macho_MM_DD_dragonball.jpg -g dragonball --yes
+python main.py -i macho_MM_DD_yugioh.jpg -g yugioh --yes
 ```
 
 **⚠️ 重要: 全ゲーム分を実行したか必ず確認すること。実行漏れに注意。**
 
-### 3. コミット＆プッシュ
+### コミット＆プッシュ
 
 ```bash
-git add data/homura_MM_DD_*.json
-git commit -m "Add homura MM/DD price data for all games and update spreadsheet"
+git add data/
+git commit -m "Add macho MM/DD price data and update spreadsheet"
 git push -u origin claude/trading-card-price-updater-AoJuA
 ```
 
@@ -85,13 +86,23 @@ git push -u origin claude/trading-card-price-updater-AoJuA
 ## マージン設定
 
 ### ほむら東京（homura）
-- ポケモン: BOX +200円 / シュリンクなし +200円
-- ワンピース: BOX +200円 / カートン +1,000円
-- ドラゴンボール: BOX +200円 / カートン +1,000円
-- 遊戯王: BOX +200円
+
+| ゲーム | BOX / シュリンクあり | カートン / シュリンクなし |
+|--------|---------------------|--------------------------|
+| ポケモン | +200円 | +200円 |
+| ワンピース | +200円 | +1,000円 |
+| ドラゴンボール | +200円 | +1,000円 |
+| 遊戯王 | +200円 | — |
 
 ### マッチョ（macho）
-- ワンピース: **BOX 同額（0円）/ カートン +1,000円**
-  ```bash
-  python main.py --from-json data/macho_MM_DD_onepiece.json -g onepiece --margin-box 0 --margin-carton 1000 --yes
-  ```
+
+| ゲーム | BOX / シュリンクあり | カートン / シュリンクなし |
+|--------|---------------------|--------------------------|
+| 全ゲーム共通 | +100円 | +1,000円 |
+
+```bash
+# マッチョ実行時のオプション例
+python main.py -i macho_MM_DD_onepiece.jpg -g onepiece --margin-box 100 --margin-carton 1000 --yes
+python main.py -i macho_MM_DD_dragonball.jpg -g dragonball --margin-box 100 --margin-carton 1000 --yes
+python main.py -i macho_MM_DD_yugioh.jpg -g yugioh --margin-box 100 --yes
+```
