@@ -24,10 +24,10 @@ jobs:
 
       - name: ホムラから価格を取得（全4ゲーム）
         run: |
-          python main.py -g pokemon    --fetch-web --competitor homura --dry-run
-          python main.py -g onepiece   --fetch-web --competitor homura --dry-run
-          python main.py -g yugioh     --fetch-web --competitor homura --dry-run
-          python main.py -g dragonball --fetch-web --competitor homura --dry-run
+          python main.py -g pokemon    --fetch-web --competitor homura --yes
+          python main.py -g onepiece   --fetch-web --competitor homura --yes
+          python main.py -g yugioh     --fetch-web --competitor homura --yes
+          python main.py -g dragonball --fetch-web --competitor homura --yes
 
       - name: JSONをコミット＆プッシュ
         run: |
