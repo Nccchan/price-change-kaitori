@@ -23,6 +23,8 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: ホムラから価格を取得（全4ゲーム）
+        env:
+          GAS_WEBHOOK_URL: ${{ secrets.GAS_WEBHOOK_URL }}
         run: |
           python main.py -g pokemon    --fetch-web --competitor homura --yes
           python main.py -g onepiece   --fetch-web --competitor homura --yes
