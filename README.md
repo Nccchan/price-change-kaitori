@@ -4,7 +4,7 @@
 
 ## 機能
 
-1. **ウェブ自動取得**: ほむら東京のウェブサイトから価格を自動スクレイピング（GitHub Actions で毎日実行）
+1. **ウェブ自動取得**: ほむら東京のウェブサイトから価格を自動スクレイピング（GitHub Actions で実行）
 2. **画像解析**: 競合価格表画像を Claude Vision API で解析（マッチョ買取など画像のみの競合に対応）
 3. **JSON読み込み**: 解析済みJSONファイルから直接データを読み込むことも可能
 4. **価格比較**: スプレッドシートの現行価格と比較し、マージン状態を評価
@@ -33,27 +33,21 @@ pip install -r requirements.txt
 
 ### 2. 環境変数設定
 
-```bash
-cp .env.example .env
-# .env を編集して以下を設定:
-#   ANTHROPIC_API_KEY=your_key
-#   SPREADSHEET_ID=your_spreadsheet_id
-#   GAS_WEBHOOK_URL=your_gas_webhook_url
+`.env` ファイルを作成して以下を設定：
+
 ```
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+SPREADSHEET_ID=1PBMNNYHliomlgeNsvZgiccrfOWpIJbYPb9EMFtSAgdw
+GAS_WEBHOOK_URL=https://script.google.com/macros/s/.../exec
+```
+
+> **Claude Code on the web を使用する場合**: `.claude/hooks/session-start.sh` がセッション開始時に自動的に `.env` を生成します。
 
 ## 使い方
 
 ### ほむら東京（ウェブ自動取得）
 
-GitHub Actions の「ホムラ価格取得」ワークフローが自動実行します。
-手動で実行する場合:
-
-```bash
-python main.py -g pokemon    --fetch-web --competitor homura --dry-run
-python main.py -g onepiece   --fetch-web --competitor homura --dry-run
-python main.py -g yugioh     --fetch-web --competitor homura --dry-run
-python main.py -g dragonball --fetch-web --competitor homura --dry-run
-```
+GitHub の Actions タブ → `ホムラ価格取得` → Run workflow で実行。
 
 ### マッチョ買取（画像貼り付け）
 
@@ -65,10 +59,12 @@ python main.py -i macho_dragonball.jpg -g dragonball --margin-box 100 --margin-c
 python main.py -i macho_yugioh.jpg     -g yugioh     --margin-box 100 --yes
 ```
 
-### JSONファイルから更新
+### JSONファイルから更新（書き込み漏れ・再実行時）
 
 ```bash
-python main.py --from-json data/homura_3_9_pokemon.json -g pokemon --yes
+python main.py --from-json data/macho_MM_DD_onepiece.json   -g onepiece   --margin-box 100 --margin-carton 1000 --yes
+python main.py --from-json data/macho_MM_DD_dragonball.json -g dragonball --margin-box 100 --margin-carton 1000 --yes
+python main.py --from-json data/macho_MM_DD_yugioh.json     -g yugioh     --margin-box 100 --yes
 ```
 
 ### データファイルの命名規則
@@ -98,10 +94,10 @@ data/{競合}_{月}_{日}_{ゲーム}.json
 
 ## スプレッドシート書き込み方式
 
-| 方式 | 用途 |
-|------|------|
-| GAS Webhook | 価格セルの書き込み（メイン） |
-| Sheets API v4 | 日付セル（A2）の更新 |
+| 方式 | 用途 | 状態 |
+|------|------|------|
+| GAS Webhook | 価格セルの書き込み（メイン） | ✅ 正常 |
+| Sheets API v4 | 日付セル（A2）の更新 | ❌ 403エラー（未対応） |
 
 ## スプレッドシート構成
 
