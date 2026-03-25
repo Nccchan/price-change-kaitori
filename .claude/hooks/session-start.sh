@@ -9,6 +9,7 @@ fi
 cat > "$CLAUDE_PROJECT_DIR/.env" << 'EOF'
 GAS_WEBHOOK_URL=https://script.google.com/macros/s/AKfycbxppdSa5_-jnLBTkXZBRGpXaNx27Fb80UkqbktkZCJyICW6HvUxsYHRqK2o6vIT5_NH_A/exec
 SPREADSHEET_ID=1PBMNNYHliomlgeNsvZgiccrfOWpIJbYPb9EMFtSAgdw
+GITHUB_TOKEN=PLACEHOLDER_REPLACE_ME
 EOF
 
 # Pythonパッケージをインストール

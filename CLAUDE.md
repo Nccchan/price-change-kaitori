@@ -19,6 +19,7 @@
 ```
 GAS_WEBHOOK_URL=https://script.google.com/macros/s/AKfycbxppdSa5_-jnLBTkXZBRGpXaNx27Fb80UkqbktkZCJyICW6HvUxsYHRqK2o6vIT5_NH_A/exec
 SPREADSHEET_ID=1PBMNNYHliomlgeNsvZgiccrfOWpIJbYPb9EMFtSAgdw
+GITHUB_TOKEN=<GitHubパーソナルアクセストークン>
 ```
 
 GitHub Actions では `secrets.GAS_WEBHOOK_URL` シークレットを使用。
@@ -26,15 +27,28 @@ GitHub Actions では `secrets.GAS_WEBHOOK_URL` シークレットを使用。
 ## 制限事項（Claude Code on the web）
 
 - `kaitori-homura.com` へのアクセス不可（DNS解決失敗）→ ホムラの価格取得はこの環境では実行できない
-- GitHub Actions を直接トリガーする手段なし（プロキシが git 操作のみ対応）
-- **ホムラの価格取得・スプレッドシート書き込みは GitHub の Actions タブから手動で実行すること**
 - Sheets API（日付セル A2 の更新）は 403 エラーのため機能しない。価格データは GAS 経由で書き込む
+
+## GitHub Actions のトリガー方法
+
+`GITHUB_TOKEN` を使って GitHub API 経由でトリガーできる：
+
+```bash
+source .env
+curl -s -X POST \
+  -H "Authorization: token $GITHUB_TOKEN" \
+  -H "Accept: application/vnd.github.v3+json" \
+  "https://api.github.com/repos/Nccchan/price-change-kaitori/actions/workflows/fetch-homura.yml/dispatches" \
+  -d '{"ref": "claude/trading-card-price-updater-AoJuA"}'
+```
+
+デフォルトブランチ: `claude/trading-card-price-updater-AoJuA`
 
 ## 日次ルーティン
 
 ### ほむら東京（homura）
 
-**GitHub の Actions タブ** → `ホムラ価格取得` → Run workflow で手動実行する。
+**GitHub Actions を API 経由でトリガーする**（上記参照）。
 
 実行すると全4ゲーム分を取得し、`data/homura_MM_DD_GAME.json` を生成・コミット・スプレッドシート書き込みまで自動で行う。
 
