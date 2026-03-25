@@ -1,0 +1,56 @@
+name: マッチョ価格処理
+
+on:
+  workflow_dispatch:
+    inputs:
+      game:
+        description: 'ゲーム種別'
+        required: true
+        type: choice
+        options:
+          - onepiece
+          - dragonball
+          - yugioh
+          - pokemon
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: チェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python セットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 依存パッケージをインストール
+        run: pip install -r requirements.txt
+
+      - name: 最新JSONを特定してスプレッドシート更新
+        env:
+          GAS_WEBHOOK_URL: ${{ secrets.GAS_WEBHOOK_URL }}
+        run: |
+          GAME="${{ github.event.inputs.game }}"
+          LATEST=$(ls data/macho_*_${GAME}.json 2>/dev/null | sort -t_ -k2,3 -V | tail -1)
+          if [ -z "$LATEST" ]; then
+            echo "エラー: data/macho_*_${GAME}.json が見つかりません"
+            exit 1
+          fi
+          echo "処理ファイル: $LATEST"
+          case "$GAME" in
+            onepiece|dragonball)
+              python main.py --from-json "$LATEST" -g "$GAME" --margin-box 100 --margin-carton 1000 --yes
+              ;;
+            yugioh)
+              python main.py --from-json "$LATEST" -g "$GAME" --margin-box 100 --yes
+              ;;
+            pokemon)
+              python main.py --from-json "$LATEST" -g "$GAME" --margin-box 100 --margin-carton 1000 --yes
+              ;;
+          esac
