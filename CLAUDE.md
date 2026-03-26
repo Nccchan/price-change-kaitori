@@ -16,7 +16,29 @@
 ### ほむら東京（homura）
 
 GitHub Actions の「ホムラ価格取得」ワークフローが自動実行する。
-手動トリガーする場合は Actions タブ → `ホムラ価格取得` → Run workflow。
+
+**⚠️ Claude Code（ウェブ版）からのトリガー方法**
+
+Claude Code ウェブ版には `gh` CLI も GitHub workflow dispatch MCP ツールも存在しない。
+代わりに以下の手順でトリガーする（毎回この手順を実行すること）:
+
+1. **ワークフローに push トリガーを一時追加**（`mcp__github__push_files` で `.github/workflows/fetch-homura.yml` を更新）:
+   ```yaml
+   on:
+     workflow_dispatch:
+     push:
+       branches: [現在の作業ブランチ名]
+       paths: ['trigger-homura']
+   ```
+
+2. **トリガーファイルをプッシュ**（`mcp__github__push_files` で `trigger-homura` ファイルを作成）
+
+3. **完了を待つ**（約1〜2分。`mcp__github__list_commits` で `github-actions[bot]` のコミットを確認）
+
+4. **後片付け**:
+   - `mcp__github__push_files` でワークフローを元に戻す（push トリガー削除）
+   - `mcp__github__delete_file` で `trigger-homura` を削除
+   - ローカルに新しいJSONをフェッチ: `git fetch origin <branch> && git checkout origin/<branch> -- data/homura_MM_DD_*.json`
 
 自動実行されると `data/homura_MM_DD_GAME.json` が生成・コミットされる。
 
@@ -37,7 +59,7 @@ python main.py -i macho_MM_DD_yugioh.jpg -g yugioh --yes
 ```bash
 git add data/
 git commit -m "Add macho MM/DD price data and update spreadsheet"
-git push -u origin claude/trading-card-price-updater-AoJuA
+git push -u origin claude/clarify-capabilities-Q63XS
 ```
 
 ## 前日更新をスキップした場合
