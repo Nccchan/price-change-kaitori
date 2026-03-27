@@ -2,20 +2,19 @@
 
 ## プロジェクト概要
 
-競合店（ほむら東京・マッチョ）の買取価格を解析し、自社スプレッドシートの買取価格を自動更新するツール。
+競合店の買取価格を解析し、自社スプレッドシートの買取価格を自動更新するツール。
 
-## 競合店の対応方式
+## 基本運用方針
 
-| 競合店 | 方式 | 備考 |
-|--------|------|------|
-| ほむら東京（homura） | **ウェブ自動取得** | GitHub Actions で毎日自動実行 |
-| マッチョ（macho） | **画像貼り付け** | ウェブサイトなし。画像を渡してAI解析 |
+**メイン参照: ほむら東京（毎日ウェブ自動取得）**
+サブ更新: 指示があった場合に、ゲームを指定して画像またはテキストで任意の競合店の価格を読み取り更新する。
+競合店はマッチョに限らず、どの店舗でも対応可能。
 
 ## 日次ルーティン
 
-### ほむら東京（homura）
+### 1. ほむら東京の価格取得（メイン）
 
-GitHub Actions の「ホムラ価格取得」ワークフローが自動実行する。
+GitHub Actions の「ホムラ価格取得」ワークフローで全4ゲームの価格を取得し、スプレッドシートを更新する。
 
 **⚠️ Claude Code（ウェブ版）からのトリガー方法**
 
@@ -42,23 +41,35 @@ Claude Code ウェブ版には `gh` CLI も GitHub workflow dispatch MCP ツー�
 
 自動実行されると `data/homura_MM_DD_GAME.json` が生成・コミットされる。
 
-### マッチョ（macho）
-
-画像を貼り付けてAIに解析させ、JSONを生成→スプレッドシート更新する。
+取得後、以下のコマンドでスプレッドシートを更新する:
 
 ```bash
-python main.py -i macho_MM_DD_onepiece.jpg -g onepiece --yes
-python main.py -i macho_MM_DD_dragonball.jpg -g dragonball --yes
-python main.py -i macho_MM_DD_yugioh.jpg -g yugioh --yes
+python main.py --from-json data/homura_MM_DD_pokemon.json    -g pokemon    --yes
+python main.py --from-json data/homura_MM_DD_onepiece.json   -g onepiece   --margin-box 500 --margin-carton 3000 --yes
+python main.py --from-json data/homura_MM_DD_yugioh.json     -g yugioh     --yes
+python main.py --from-json data/homura_MM_DD_dragonball.json -g dragonball --yes
 ```
 
-**⚠️ 重要: 全ゲーム分を実行したか必ず確認すること。実行漏れに注意。**
+### 2. サブ更新（任意競合・指示ベース）
 
-### コミット＆プッシュ
+「〇〇の△△（ゲーム名）を更新して」と指示があった場合に実行。
+画像・テキスト・URLなど形式は問わない。競合店もマッチョ以外でも可。
+
+```bash
+# 画像から読み取る場合
+python main.py -i <画像ファイル> -g <ゲーム> -c <競合名> --margin-box <N> --margin-carton <M> --yes
+
+# テキストやJSONから更新する場合
+python main.py --from-json data/<競合>_MM_DD_<ゲーム>.json -g <ゲーム> --margin-box <N> --margin-carton <M> --yes
+```
+
+**更新前に必ず現在価格と比較して確認してから更新すること（`--dry-run` または比較スクリプト）。**
+
+### 3. コミット＆プッシュ
 
 ```bash
 git add data/
-git commit -m "Add macho MM/DD price data and update spreadsheet"
+git commit -m "Add MM/DD price data and update spreadsheet"
 git push -u origin claude/clarify-capabilities-Q63XS
 ```
 
@@ -105,11 +116,10 @@ git push -u origin claude/clarify-capabilities-Q63XS
 | dragonball | BOX | カートン |
 | yugioh | BOX（price_1のみ使用） | — |
 
-## マージン設定
+## マージン設定（ほむら東京基準）
 
-**基本方針: すべてほむら東京を参照する。マッチョは参考程度。**
-
-### ほむら東京（homura）← メイン参照
+**基本方針: すべてほむら東京を参照する。**
+サブ更新時は指示に従いマージンを調整すること。
 
 | ゲーム | BOX / シュリンクあり | カートン / シュリンクなし |
 |--------|---------------------|--------------------------|
@@ -117,20 +127,3 @@ git push -u origin claude/clarify-capabilities-Q63XS
 | ワンピース | +500円 | +3,000円 |
 | ドラゴンボール | +200円 | +1,000円 |
 | 遊戯王 | +200円 | — |
-
-```bash
-# ほむら実行時のオプション例（fetch-web で自動取得後に適用）
-python main.py --from-json data/homura_MM_DD_onepiece.json -g onepiece --margin-box 500 --margin-carton 3000 --yes
-python main.py --from-json data/homura_MM_DD_dragonball.json -g dragonball --margin-box 200 --margin-carton 1000 --yes
-python main.py --from-json data/homura_MM_DD_yugioh.json -g yugioh --margin-box 200 --yes
-python main.py --from-json data/homura_MM_DD_pokemon.json -g pokemon --yes
-```
-
-### マッチョ（macho）← 参考のみ
-
-マッチョは画像取得が手間のため、基本はほむらで代替。
-必要時のみ実行（マージンはホムラ準拠でなく以下を使用）:
-
-| ゲーム | BOX / シュリンクあり | カートン / シュリンクなし |
-|--------|---------------------|--------------------------|
-| 全ゲーム共通 | +100円 | +1,000円 |

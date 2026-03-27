@@ -2,26 +2,30 @@
 
 競合他社の買取価格を取得・解析し、Google Sheets の現行価格と比較・自動更新するツールです。
 
+## 運用方針
+
+- **メイン**: ほむら東京の価格をウェブ自動取得し、毎日全ゲームを更新
+- **サブ**: 指示に応じて任意の競合店の価格（画像・テキスト問わず）を読み取り、指定ゲームを更新
+
 ## 機能
 
 1. **ウェブ自動取得**: ほむら東京のウェブサイトから価格を自動スクレイピング（GitHub Actions で毎日実行）
-2. **画像解析**: 競合価格表画像を Claude Vision API で解析（マッチョ買取など画像のみの競合に対応）
+2. **画像・テキスト解析**: 競合価格表を Claude Vision API で解析（画像のみの競合店にも対応）
 3. **JSON読み込み**: 解析済みJSONファイルから直接データを読み込むことも可能
 4. **価格比較**: スプレッドシートの現行価格と比較し、マージン状態を評価
 5. **差分レポート**: 要対応商品・大幅変動品のレポートを生成
 6. **自動更新**: GAS Webhook で価格を一括書き換え
 
-## 対応カードゲーム・競合
+## 対応カードゲームとマージン設定
 
-| ゲーム | 競合 | 取得方式 | BOXマージン | カートンマージン |
-|--------|------|----------|------------|----------------|
-| ポケモン | ほむら東京 | ウェブ自動 | +200円 | +200円 |
-| ワンピース | ほむら東京 | ウェブ自動 | +200円 | +1,000円 |
-| ワンピース | マッチョ買取 | 画像貼り付け | +100円 | +1,000円 |
-| ドラゴンボール | ほむら東京 | ウェブ自動 | +200円 | +1,000円 |
-| ドラゴンボール | マッチョ買取 | 画像貼り付け | +100円 | +1,000円 |
-| 遊戯王 | ほむら東京 | ウェブ自動 | +200円 | — |
-| 遊戯王 | マッチョ買取 | 画像貼り付け | +100円 | — |
+| ゲーム | メイン参照 | BOXマージン | カートンマージン |
+|--------|-----------|------------|----------------|
+| ポケモン | ほむら東京 | +200円 | +200円 |
+| ワンピース | ほむら東京 | +500円 | +3,000円 |
+| ドラゴンボール | ほむら東京 | +200円 | +1,000円 |
+| 遊戯王 | ほむら東京 | +200円 | — |
+
+サブ更新時は指示に応じて競合店・マージンを変更して実行する。
 
 ## セットアップ
 
@@ -43,32 +47,35 @@ cp .env.example .env
 
 ## 使い方
 
-### ほむら東京（ウェブ自動取得）
+### メイン: ほむら東京（ウェブ自動取得 → スプレッドシート更新）
 
-GitHub Actions の「ホムラ価格取得」ワークフローが自動実行します。
-手動で実行する場合:
+GitHub Actions の「ホムラ価格取得」ワークフローが自動実行します（データ取得のみ）。
+取得後、以下でスプレッドシートを更新します:
 
 ```bash
-python main.py -g pokemon    --fetch-web --competitor homura --dry-run
-python main.py -g onepiece   --fetch-web --competitor homura --dry-run
-python main.py -g yugioh     --fetch-web --competitor homura --dry-run
-python main.py -g dragonball --fetch-web --competitor homura --dry-run
+python main.py --from-json data/homura_MM_DD_pokemon.json    -g pokemon    --yes
+python main.py --from-json data/homura_MM_DD_onepiece.json   -g onepiece   --margin-box 500 --margin-carton 3000 --yes
+python main.py --from-json data/homura_MM_DD_yugioh.json     -g yugioh     --yes
+python main.py --from-json data/homura_MM_DD_dragonball.json -g dragonball --yes
 ```
 
-### マッチョ買取（画像貼り付け）
+### サブ: 任意競合店の価格で指定ゲームを更新
 
-画像を渡してAI解析し、スプレッドシートを更新します。
+画像・テキスト・URLなど形式は問いません。競合店はどこでも対応可能です。
 
 ```bash
-python main.py -i macho_onepiece.jpg   -g onepiece   --margin-box 100 --margin-carton 1000 --yes
-python main.py -i macho_dragonball.jpg -g dragonball --margin-box 100 --margin-carton 1000 --yes
-python main.py -i macho_yugioh.jpg     -g yugioh     --margin-box 100 --yes
+# 画像から読み取って更新
+python main.py -i <画像ファイル> -g <ゲーム> -c <競合名> --margin-box <N> --margin-carton <M> --yes
+
+# ドライランで確認してから更新
+python main.py -i <画像ファイル> -g <ゲーム> --dry-run
+python main.py -i <画像ファイル> -g <ゲーム> --yes
 ```
 
 ### JSONファイルから更新
 
 ```bash
-python main.py --from-json data/homura_3_9_pokemon.json -g pokemon --yes
+python main.py --from-json data/homura_3_27_pokemon.json -g pokemon --yes
 ```
 
 ### データファイルの命名規則
@@ -77,8 +84,8 @@ python main.py --from-json data/homura_3_9_pokemon.json -g pokemon --yes
 data/{競合}_{月}_{日}_{ゲーム}.json
 
 例:
-  data/homura_3_9_pokemon.json     # ほむら東京・3/9・ポケモン
-  data/macho_3_9_onepiece.json     # マッチョ買取・3/9・ワンピース
+  data/homura_3_27_pokemon.json    # ほむら東京・3/27・ポケモン
+  data/macho_3_26_onepiece.json    # マッチョ買取・3/26・ワンピース
 ```
 
 ### オプション一覧
@@ -88,7 +95,7 @@ data/{競合}_{月}_{日}_{ゲーム}.json
 --from-json       解析済みJSONファイルから読み込む
 --fetch-web       ウェブサイトから価格を自動取得（homura のみ対応）
 -g, --game        カードゲーム種別（pokemon / onepiece / dragonball / yugioh）[必須]
--c, --competitor  競合名（homura / macho）省略時は自動判定
+-c, --competitor  競合名（省略時は自動判定）
 --dry-run         スプレッドシートを更新せず比較レポートのみ出力
 -y, --yes         確認プロンプトをスキップして自動更新
 --margin-box      BOXマージン上書き（円）
@@ -114,5 +121,6 @@ data/{競合}_{月}_{日}_{ゲーム}.json
 ## 注意事項
 
 - 画像解析には `ANTHROPIC_API_KEY` が必要です
+- サブ更新時は必ず事前に `--dry-run` または比較スクリプトで現在価格と確認してから更新すること
 - 大幅な価格変動（±5,000円以上）は ⚡ マークで強調表示されます
 - 新規商品は 🆕 マークで表示されシートの末尾に追加されます
