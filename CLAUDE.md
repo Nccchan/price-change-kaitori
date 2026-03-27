@@ -107,24 +107,30 @@ git push -u origin claude/clarify-capabilities-Q63XS
 
 ## マージン設定
 
-### ほむら東京（homura）
+**基本方針: すべてほむら東京を参照する。マッチョは参考程度。**
+
+### ほむら東京（homura）← メイン参照
 
 | ゲーム | BOX / シュリンクあり | カートン / シュリンクなし |
 |--------|---------------------|--------------------------|
 | ポケモン | +200円 | +200円 |
-| ワンピース | +200円 | +1,000円 |
+| ワンピース | +500円 | +3,000円 |
 | ドラゴンボール | +200円 | +1,000円 |
 | 遊戯王 | +200円 | — |
 
-### マッチョ（macho）
+```bash
+# ほむら実行時のオプション例（fetch-web で自動取得後に適用）
+python main.py --from-json data/homura_MM_DD_onepiece.json -g onepiece --margin-box 500 --margin-carton 3000 --yes
+python main.py --from-json data/homura_MM_DD_dragonball.json -g dragonball --margin-box 200 --margin-carton 1000 --yes
+python main.py --from-json data/homura_MM_DD_yugioh.json -g yugioh --margin-box 200 --yes
+python main.py --from-json data/homura_MM_DD_pokemon.json -g pokemon --yes
+```
+
+### マッチョ（macho）← 参考のみ
+
+マッチョは画像取得が手間のため、基本はほむらで代替。
+必要時のみ実行（マージンはホムラ準拠でなく以下を使用）:
 
 | ゲーム | BOX / シュリンクあり | カートン / シュリンクなし |
 |--------|---------------------|--------------------------|
 | 全ゲーム共通 | +100円 | +1,000円 |
-
-```bash
-# マッチョ実行時のオプション例
-python main.py -i macho_MM_DD_onepiece.jpg -g onepiece --margin-box 100 --margin-carton 1000 --yes
-python main.py -i macho_MM_DD_dragonball.jpg -g dragonball --margin-box 100 --margin-carton 1000 --yes
-python main.py -i macho_MM_DD_yugioh.jpg -g yugioh --margin-box 100 --yes
-```
