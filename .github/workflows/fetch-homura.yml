@@ -2,6 +2,9 @@ name: ホムラ価格取得
 
 on:
   workflow_dispatch:  # 手動実行のみ（GitHubのActionsタブ or Claude Code から起動）
+  push:
+    branches: [claude/clarify-capabilities-Q63XS]
+    paths: ['trigger-homura']
 
 jobs:
   fetch:
