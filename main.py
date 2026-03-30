@@ -200,16 +200,23 @@ def main(
         from src.homura_fetcher import HomuraFetcher
         from src.models import GameType as _GameType
 
-        # 競合別フェッチャーを選択（現在はHomuraのみ実装済み）
+        # 競合別フェッチャーを選択
         comp = (competitor or "homura").lower()
-        if comp != "homura":
-            click.echo(f"[ERROR] --fetch-web は現在 homura のみ対応しています（指定: {comp}）", err=True)
+        game_type = _GameType.from_str(game)
+
+        if comp == "homura":
+            click.echo("【Step 1】 ほむら東京ウェブサイトから価格を取得中...")
+            fetcher = HomuraFetcher()
+        elif comp in ("kaitorihakase", "買取博士"):
+            from src.kaitorihakase_fetcher import KaitorihakaseFetcher
+            click.echo("【Step 1】 買取博士ウェブサイトから価格を取得中...")
+            fetcher = KaitorihakaseFetcher()
+            comp = "kaitorihakase"
+        else:
+            click.echo(f"[ERROR] --fetch-web は homura / kaitorihakase のみ対応しています（指定: {comp}）", err=True)
             sys.exit(1)
 
-        click.echo("【Step 1】 ほむら東京ウェブサイトから価格を取得中...")
         try:
-            fetcher = HomuraFetcher()
-            game_type = _GameType.from_str(game)
             competitor_data = fetcher.fetch(game_type, today=date)
         except Exception as e:
             click.echo(f"\n[ERROR] ウェブ取得に失敗しました: {e}", err=True)
@@ -219,7 +226,7 @@ def main(
         import json as _json
         import datetime as _dt
         _today = _dt.date.today()
-        _json_path = f"data/homura_{_today.month}_{_today.day}_{game}.json"
+        _json_path = f"data/{comp}_{_today.month}_{_today.day}_{game}.json"
         os.makedirs("data", exist_ok=True)
         with open(_json_path, "w", encoding="utf-8") as _jf:
             _json.dump(fetcher.to_json(competitor_data), _jf, ensure_ascii=False, indent=2)

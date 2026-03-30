@@ -88,6 +88,7 @@ DEFAULT_COMPETITORS = {
 COMPETITOR_NAMES = {
     "homura": "ほむら東京",
     "macho": "マッチョ買取",
+    "kaitorihakase": "買取博士",
     "other": "その他",
 }
 
