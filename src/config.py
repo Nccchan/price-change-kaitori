@@ -50,7 +50,7 @@ MARGINS = {
     },
     "onepiece": {
         "box": int(os.getenv("MARGIN_ONEPIECE_BOX", "200")),
-        "carton": int(os.getenv("MARGIN_ONEPIECE_CARTON", "1000")),
+        "carton": int(os.getenv("MARGIN_ONEPIECE_CARTON", "2000")),
     },
     "dragonball": {
         "box": int(os.getenv("MARGIN_DRAGONBALL_BOX", "200")),

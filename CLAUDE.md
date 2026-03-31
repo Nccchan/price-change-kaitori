@@ -45,7 +45,7 @@ Claude Code ウェブ版には `gh` CLI も GitHub workflow dispatch MCP ツー�
 
 ```bash
 python main.py --from-json data/homura_MM_DD_pokemon.json    -g pokemon    --yes
-python main.py --from-json data/homura_MM_DD_onepiece.json   -g onepiece   --margin-box 500 --margin-carton 3000 --yes
+python main.py --from-json data/homura_MM_DD_onepiece.json   -g onepiece   --yes
 python main.py --from-json data/homura_MM_DD_yugioh.json     -g yugioh     --yes
 python main.py --from-json data/homura_MM_DD_dragonball.json -g dragonball --yes
 ```
@@ -124,6 +124,6 @@ git push -u origin claude/clarify-capabilities-Q63XS
 | ゲーム | BOX / シュリンクあり | カートン / シュリンクなし |
 |--------|---------------------|--------------------------|
 | ポケモン | +200円 | +200円 |
-| ワンピース | +500円 | +3,000円 |
+| ワンピース | +200円 | +2,000円 |
 | ドラゴンボール | +200円 | +1,000円 |
 | 遊戯王 | +200円 | — |
