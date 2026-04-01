@@ -22,7 +22,7 @@
       "price_2": 48000
     },
     {
-      "name": "限界を超えた者",
+      "name": "限界を超えし者",
       "code": "FB-04",
       "price_1": 5500,
       "price_2": 66000
@@ -34,7 +34,7 @@
       "price_2": 87600
     },
     {
-      "name": "迫りくる脅威",
+      "name": "迫り来る脅威",
       "code": "FB-06",
       "price_1": 6500,
       "price_2": 72000
@@ -58,13 +58,13 @@
       "price_2": 105600
     },
     {
-      "name": "MANGA BOOSTER　01",
+      "name": "MANGA 01",
       "code": "SB-01",
       "price_1": 32000,
       "price_2": 384000
     },
     {
-      "name": "MANGA BOOSTER 02",
+      "name": "MANGA 02",
       "code": "SB-02",
       "price_1": 20000,
       "price_2": 240000

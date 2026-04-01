@@ -129,20 +129,20 @@ class KaitorihakaseFetcher:
             # FB01 → FB-01, SB01 → SB-01 のような形式を正規化
             norm_ed = re.sub(r'^([A-Z]+)(\d{2}[a-z]?)$', r'\1-\2', edition.strip())
             if norm_ed in master:
-                name = re.sub(r'^[A-Z]+-\d{2}[a-z]?\s+', '', product_name).strip()
-                return norm_ed, name or product_name
+                # マスターの正規名を使うことでスプレッドシートの名前と一致させる
+                return norm_ed, master[norm_ed]
 
         # 2. 商品名の先頭にコードが含まれている場合 (OP-02 頂上決戦, FB01 覚醒の鼓動)
         m = re.match(r'^([A-Z]+-\d{2}[a-z]?)\s+(.*)', product_name)
         if m and m.group(1) in master:
-            return m.group(1), m.group(2).strip()
+            return m.group(1), master[m.group(1)]
 
         # ハイフンなし: FB01 → FB-01
         m2 = re.match(r'^([A-Z]+)(\d{2}[a-z]?)\s+(.*)', product_name)
         if m2:
             norm_code = m2.group(1) + '-' + m2.group(2)
             if norm_code in master:
-                return norm_code, m2.group(3).strip()
+                return norm_code, master[norm_code]
 
         # 3. マスターデータの名前で完全一致
         normalized = self._normalize(product_name)
