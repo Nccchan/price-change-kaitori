@@ -22,13 +22,12 @@ jobs:
       - name: 依存パッケージをインストール
         run: pip install -r requirements.txt
 
-      - name: ホムラから価格を取得（全4ゲーム）
+      - name: ホムラから価格を取得（3ゲーム）
         env:
           GAS_WEBHOOK_URL: ${{ secrets.GAS_WEBHOOK_URL }}
         run: |
           python main.py -g pokemon    --fetch-web --competitor homura --yes
           python main.py -g onepiece   --fetch-web --competitor homura --yes
-          python main.py -g yugioh     --fetch-web --competitor homura --yes
           python main.py -g dragonball --fetch-web --competitor homura --yes
 
       - name: JSONをコミット＆プッシュ
