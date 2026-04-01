@@ -14,7 +14,8 @@
 
 ### 1. ほむら東京の価格取得（メイン）
 
-GitHub Actions の「ホムラ価格取得」ワークフローで全4ゲームの価格を取得し、スプレッドシートを更新する。
+GitHub Actions の「ホムラ価格取得」ワークフローで3ゲーム（ポケモン・ワンピース・ドラゴンボール）の価格を取得し、スプレッドシートを更新する。
+**遊戯王は手動管理（スプレッドシート列構造の違いにより自動更新対象外）。**
 
 **⚠️ Claude Code（ウェブ版）からのトリガー方法**
 
@@ -46,9 +47,10 @@ Claude Code ウェブ版には `gh` CLI も GitHub workflow dispatch MCP ツー�
 ```bash
 python main.py --from-json data/homura_MM_DD_pokemon.json    -g pokemon    --yes
 python main.py --from-json data/homura_MM_DD_onepiece.json   -g onepiece   --yes
-python main.py --from-json data/homura_MM_DD_yugioh.json     -g yugioh     --yes
 python main.py --from-json data/homura_MM_DD_dragonball.json -g dragonball --yes
 ```
+
+※ 遊戯王は手動管理のため除外。
 
 ### 2. サブ更新（任意競合・指示ベース）
 
@@ -126,4 +128,4 @@ git push -u origin claude/clarify-capabilities-Q63XS
 | ポケモン | +200円 | +200円 |
 | ワンピース | +200円 | +2,000円 |
 | ドラゴンボール | +200円 | +1,000円 |
-| 遊戯王 | +200円 | — |
+| 遊戯王 | 手動管理 | — |
