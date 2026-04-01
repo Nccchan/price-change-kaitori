@@ -99,7 +99,7 @@ class GVizReader:
             .values()
             .get(
                 spreadsheetId=self.spreadsheet_id,
-                range=f"'{sheet_name}'!A:D",
+                range=f"'{sheet_name}'!A:E",
             )
             .execute()
         )

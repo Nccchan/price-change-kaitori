@@ -32,12 +32,12 @@ SHEET_COLUMNS = {
 }
 
 # ゲーム別列オーバーライド
-# ポケモン以外のシートは現在 D列(price2_col)のみに価格が入っているため
-# price1_col と price2_col を入れ替えて BOX価格を price_1 として読み込む
+# dragonball/onepiece/yugioh の列構造:
+#   A(0)=空, B(1)=商品名, C(2)=型式, D(3)=BOX価格, E(4)=カートン価格
 SHEET_COLUMNS_OVERRIDE = {
-    "onepiece":    {**SHEET_COLUMNS, "price1_col": 3, "price2_col": 2},
-    "dragonball":  {**SHEET_COLUMNS, "price1_col": 3, "price2_col": 2},
-    "yugioh":      {**SHEET_COLUMNS, "price1_col": 3, "price2_col": 2},
+    "onepiece":    {**SHEET_COLUMNS, "name_col": 1, "code_col": 2, "price1_col": 3, "price2_col": 4},
+    "dragonball":  {**SHEET_COLUMNS, "name_col": 1, "code_col": 2, "price1_col": 3, "price2_col": 4},
+    "yugioh":      {**SHEET_COLUMNS, "name_col": 1, "code_col": 2, "price1_col": 3, "price2_col": 4},
 }
 
 # ==============================
