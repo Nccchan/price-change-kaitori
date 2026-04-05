@@ -44,18 +44,27 @@ class KaitorihakaseFetcher:
         category = self.CATEGORY_MAP[game]
         cat_items = [i for i in all_items if i.get("category") == category]
 
+        # デバッグ: 利用可能なタイプを出力
+        available_types = sorted(set(i.get("type", "?") for i in cat_items))
+        print(f"  [DEBUG] {game.value} 利用可能タイプ: {available_types}")
+
         if game == GameType.POKEMON:
             # シュリンクあり / シュリンクなし
             p1_items = [i for i in cat_items
                         if i.get("type") == "box" and i.get("sealing") == "shrink_on"]
             p2_items = [i for i in cat_items
                         if i.get("type") == "box" and i.get("sealing") == "shrink_off"]
+            p1_fallback_items = []
         else:
             # BOX / カートン
             p1_items = [i for i in cat_items if i.get("type") == "box"]
             p2_items = [i for i in cat_items if i.get("type") == "carton"]
+            # BOX買取非掲載の商品用フォールバック: パック（バック）単価を利用
+            # 博士がBOX単位で募集していない場合、パック価格を本の価格として使用
+            p1_fallback_items = [i for i in cat_items
+                                 if i.get("type") in ("pack", "back", "hon", "パック")]
 
-        merged = self._merge(p1_items, p2_items, game)
+        merged = self._merge(p1_items, p2_items, game, p1_fallback_items)
         today_str = today or date.today().strftime("%Y/%m/%d")
 
         return CompetitorData(
@@ -162,6 +171,7 @@ class KaitorihakaseFetcher:
         p1_items: List[dict],
         p2_items: List[dict],
         game: GameType,
+        p1_fallback_items: Optional[List[dict]] = None,
     ) -> List[CardItem]:
         master = get_master_data(game.value)  # {code: name}
         name_to_code: Dict[str, str] = {
@@ -178,11 +188,16 @@ class KaitorihakaseFetcher:
 
         p1_map = to_map(p1_items)
         p2_map = to_map(p2_items)
-        all_keys = set(p1_map) | set(p2_map)
+        p1_fallback_map = to_map(p1_fallback_items) if p1_fallback_items else {}
+        all_keys = set(p1_map) | set(p2_map) | set(p1_fallback_map)
 
         result = []
         for key in sorted(all_keys):
             e1 = p1_map.get(key)
+            # BOX価格がない場合はパック（バック）価格をフォールバックとして使用
+            if e1 is None and key in p1_fallback_map:
+                e1 = p1_fallback_map[key]
+                print(f"  [INFO] {e1['code']}: BOX非掲載のためパック価格を使用 ¥{e1['price']:,}")
             e2 = p2_map.get(key)
             base = e1 or e2
             result.append(CardItem(
