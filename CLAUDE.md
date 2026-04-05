@@ -7,8 +7,10 @@
 ## 基本運用方針
 
 **メイン参照: ほむら東京（毎日ウェブ自動取得）**
-サブ更新: 指示があった場合に、ゲームを指定して画像またはテキストで任意の競合店の価格を読み取り更新する。
-競合店はマッチョに限らず、どの店舗でも対応可能。
+**サブ参照: 買取博士（毎日ウェブ自動取得）← 2026/04/05 よりマッチョから変更**
+
+マッチョはウェブスクレイピング不可のため廃止。買取博士は自動取得ワークフロー稼働済み。
+サブ更新のマージン: BOX +200円 / カートン +200円（ほむらとは別設定）
 
 ## 日次ルーティン
 
@@ -52,20 +54,25 @@ python main.py --from-json data/homura_MM_DD_dragonball.json -g dragonball --yes
 
 ※ 遊戯王は手動管理のため除外。
 
-### 2. サブ更新（任意競合・指示ベース）
+### 2. 買取博士の価格取得（サブ）
 
-「〇〇の△△（ゲーム名）を更新して」と指示があった場合に実行。
-画像・テキスト・URLなど形式は問わない。競合店もマッチョ以外でも可。
+GitHub Actions の「買取博士価格取得」ワークフローで価格を取得する。
+fetch-kaitorihakase.yml にはすでに push トリガーが設定済みのため、トリガーファイルをプッシュするだけでよい:
+
+1. **トリガーファイルをプッシュ**（`mcp__github__push_files` で `trigger-kaitorihakase` ファイルを作成）
+2. **完了を待つ**（約1〜2分。`mcp__github__list_commits` で `github-actions[bot]` のコミットを確認）
+3. **後片付け**: `mcp__github__delete_file` で `trigger-kaitorihakase` を削除
+4. **ローカルにフェッチ**: `git fetch origin <branch> && git checkout origin/<branch> -- data/kaitorihakase_MM_DD_*.json`
+
+取得後、以下のコマンドでスプレッドシートを更新する（マージン: BOX +200円 / カートン +200円）:
 
 ```bash
-# 画像から読み取る場合
-python main.py -i <画像ファイル> -g <ゲーム> -c <競合名> --margin-box <N> --margin-carton <M> --yes
-
-# テキストやJSONから更新する場合
-python main.py --from-json data/<競合>_MM_DD_<ゲーム>.json -g <ゲーム> --margin-box <N> --margin-carton <M> --yes
+python main.py --from-json data/kaitorihakase_MM_DD_onepiece.json   -g onepiece   --margin-box 200 --margin-carton 200 --yes
+python main.py --from-json data/kaitorihakase_MM_DD_dragonball.json -g dragonball --margin-box 200 --margin-carton 200 --yes
 ```
 
-**更新前に必ず現在価格と比較して確認してから更新すること（`--dry-run` または比較スクリプト）。**
+※ ポケモンはほむらのみで管理。遊戯王は手動管理のため除外。
+※ ほむらとの比較後に実施し、博士がほむら+マージンを上回る場合のみ更新する。
 
 ### 3. コミット＆プッシュ
 
@@ -118,10 +125,9 @@ git push -u origin claude/clarify-capabilities-Q63XS
 | dragonball | BOX | カートン |
 | yugioh | BOX（price_1のみ使用） | — |
 
-## マージン設定（ほむら東京基準）
+## マージン設定
 
-**基本方針: すべてほむら東京を参照する。**
-サブ更新時は指示に従いマージンを調整すること。
+### ほむら東京基準（メイン）
 
 | ゲーム | BOX / シュリンクあり | カートン / シュリンクなし |
 |--------|---------------------|--------------------------|
@@ -129,3 +135,12 @@ git push -u origin claude/clarify-capabilities-Q63XS
 | ワンピース | +200円 | +2,000円 |
 | ドラゴンボール | +200円 | +1,000円 |
 | 遊戯王 | 手動管理 | — |
+
+### 買取博士基準（サブ）
+
+| ゲーム | BOX | カートン |
+|--------|-----|---------|
+| ワンピース | +200円 | +200円 |
+| ドラゴンボール | +200円 | +200円 |
+
+**注意**: 博士はカートン価格が低めに設定されている商品がある。ほむら+マージンより低くなる場合はほむら価格を維持すること（ツールが自動判定）。
