@@ -44,25 +44,32 @@ class KaitorihakaseFetcher:
         category = self.CATEGORY_MAP[game]
         cat_items = [i for i in all_items if i.get("category") == category]
 
-        # デバッグ: 利用可能なタイプを出力
+        # デバッグ: 利用可能なタイプ・シーリング値を出力
         available_types = sorted(set(i.get("type", "?") for i in cat_items))
-        print(f"  [DEBUG] {game.value} 利用可能タイプ: {available_types}")
+        available_sealings = sorted(set(i.get("sealing", "?") for i in cat_items if i.get("type") == "box"))
+        print(f"  [DEBUG] {game.value} タイプ: {available_types} / BOXシーリング: {available_sealings}")
 
         if game == GameType.POKEMON:
             # シュリンクあり / シュリンクなし
             p1_items = [i for i in cat_items
-                        if i.get("type") == "box" and i.get("sealing") == "shrink_on"]
+                        if i.get("type") == "box" and i.get("sealing") == "shrink_on"
+                        and (i.get("price") or 0) > 0]
             p2_items = [i for i in cat_items
-                        if i.get("type") == "box" and i.get("sealing") == "shrink_off"]
+                        if i.get("type") == "box" and i.get("sealing") == "shrink_off"
+                        and (i.get("price") or 0) > 0]
             p1_fallback_items = []
         else:
-            # BOX / カートン
-            p1_items = [i for i in cat_items if i.get("type") == "box"]
-            p2_items = [i for i in cat_items if i.get("type") == "carton"]
+            # BOX（未開封のみ・price>0）/ カートン
+            # ¥0のエントリを除外: EB-02/03等で「ボックス未開封¥14,200」と「ボックス未開封¥0」が
+            # 両方存在し、後者で上書きされる問題を修正
+            p1_items = [i for i in cat_items
+                        if i.get("type") == "box" and (i.get("price") or 0) > 0]
+            p2_items = [i for i in cat_items
+                        if i.get("type") == "carton" and (i.get("price") or 0) > 0]
             # BOX買取非掲載の商品用フォールバック: パック（バック）単価を利用
-            # 博士がBOX単位で募集していない場合、パック価格を本の価格として使用
             p1_fallback_items = [i for i in cat_items
-                                 if i.get("type") in ("pack", "back", "hon", "パック")]
+                                 if i.get("type") in ("pack", "back", "hon", "パック")
+                                 and (i.get("price") or 0) > 0]
 
         merged = self._merge(p1_items, p2_items, game, p1_fallback_items)
         today_str = today or date.today().strftime("%Y/%m/%d")
@@ -183,7 +190,11 @@ class KaitorihakaseFetcher:
             for item in items:
                 code, name = self._resolve_code(item, master, name_to_code)
                 key = self._normalize(code)
-                result[key] = {"name": name, "code": code, "price": item["price"]}
+                price = item.get("price") or 0
+                # 同一商品に複数エントリある場合は最高値を採用
+                # （例: EB-03で「ボックス未開封¥14,200」と「ボックス未開封¥0」が混在）
+                if key not in result or price > result[key]["price"]:
+                    result[key] = {"name": name, "code": code, "price": price}
             return result
 
         p1_map = to_map(p1_items)
