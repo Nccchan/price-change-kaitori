@@ -1,0 +1,163 @@
+{
+  "competitor": "homura",
+  "game": "yugioh",
+  "date": "2026/03/27",
+  "items": [
+    {
+      "name": "20th ANNIVERSARY LEGEND COLLECTION（レジェンドコレクション）",
+      "code": "4988602171501",
+      "price_1": 15000,
+      "price_2": null
+    },
+    {
+      "name": "AGE OF OVERLORD(エイジ オブ オーバーロード)",
+      "code": "4988602176223",
+      "price_1": 6400,
+      "price_2": null
+    },
+    {
+      "name": "ALLIANCE INSIGHT(アライアンス・インサイト)",
+      "code": "4988602178111",
+      "price_1": 4200,
+      "price_2": null
+    },
+    {
+      "name": "BLAZING DOMINION (ブレイジング・ドミニオン）",
+      "code": "4988602179415",
+      "price_1": 5900,
+      "price_2": null
+    },
+    {
+      "name": "BURST PROTOCOL (バースト・プロトコル)",
+      "code": "4988602179125",
+      "price_1": 5500,
+      "price_2": null
+    },
+    {
+      "name": "DUELIST ADVANCE(デュエリスト・アドバンス)",
+      "code": "4988602178333",
+      "price_1": 3200,
+      "price_2": null
+    },
+    {
+      "name": "IGNITION ASSAULT（イグニッション・アサルト）",
+      "code": "4988602172027",
+      "price_1": 20000,
+      "price_2": null
+    },
+    {
+      "name": "INFINITE FORBIDDEN（インフィニット・フォビドゥン ）",
+      "code": "4988602177251",
+      "price_1": 5400,
+      "price_2": null
+    },
+    {
+      "name": "LIMITED PACK - STAMP EDITION -BOX（スタンプエディションBOX）",
+      "code": "4988602179316",
+      "price_1": 3900,
+      "price_2": null
+    },
+    {
+      "name": "LIMITED PACK GX（リミテッド・パック・ジーエックス）",
+      "code": "4988602178760",
+      "price_1": 5300,
+      "price_2": null
+    },
+    {
+      "name": "PREMIUM PACK 2023（プレミアム・パック2023）",
+      "code": "4988602175752",
+      "price_1": 2000,
+      "price_2": null
+    },
+    {
+      "name": "PREMIUM PACK 2024（プレミアム・パック2024）",
+      "code": "4988602176995",
+      "price_1": 2400,
+      "price_2": null
+    },
+    {
+      "name": "QUARTER CENTURY ART COLLECTION(クォーターセンチュリー アート コレクション)",
+      "code": "4988602178166",
+      "price_1": 4300,
+      "price_2": null
+    },
+    {
+      "name": "QUARTER CENTURY CHRONICLE side:PRIDE（サイドプライド）",
+      "code": "4988602177138",
+      "price_1": 5600,
+      "price_2": null
+    },
+    {
+      "name": "QUARTER CENTURY CHRONICLE side:UNITY（サイドユニティ）",
+      "code": "4988602177121",
+      "price_1": 6800,
+      "price_2": null
+    },
+    {
+      "name": "QUARTER CENTURY DUELIST BOX（クォーター センチュリー デュエリスト ボックス）",
+      "code": "4988602176711",
+      "price_1": 5000,
+      "price_2": null
+    },
+    {
+      "name": "QUARTER CENTURY LIMITED PACK（クォーター・センチュリー・リミテッド・パック）",
+      "code": "4988602177749",
+      "price_1": 6300,
+      "price_2": null
+    },
+    {
+      "name": "RAGE OF THE ABYSS(レイジ・オブ・ジ・アビス)",
+      "code": "4988602177565",
+      "price_1": 7300,
+      "price_2": null
+    },
+    {
+      "name": "SUPREME DARKNESS(スプリーム・ダークネス)",
+      "code": "4988602177756",
+      "price_1": 3300,
+      "price_2": null
+    },
+    {
+      "name": "THE CHRONICLES DECK 白の物語（ザ・クロニクルズ・デッキ・白の物語）",
+      "code": "4988602179118",
+      "price_1": 2100,
+      "price_2": null
+    },
+    {
+      "name": "THE HEROES -LIMIT OVER COLLECTION（ヒーローズ）",
+      "code": "4988602179507",
+      "price_1": 14300,
+      "price_2": 345600
+    },
+    {
+      "name": "THE RIVALS- LIMIT OVER COLLECTION（ライバルズ）",
+      "code": "4988602179514",
+      "price_1": 11900,
+      "price_2": 296000
+    },
+    {
+      "name": "オーバーラッシュパック2",
+      "code": "4988602177244",
+      "price_1": 4400,
+      "price_2": null
+    },
+    {
+      "name": "クロスオーバー・ブレイカーズ",
+      "code": "4988602177633",
+      "price_1": 1800,
+      "price_2": null
+    },
+    {
+      "name": "遊戯王 LIMIT OVER COLLECTION -THE HEROES-【特典パック】",
+      "code": "4900000000001",
+      "price_1": 1600,
+      "price_2": null
+    },
+    {
+      "name": "遊戯王 LIMIT OVER COLLECTION -THE RIVALS-【特典パック】",
+      "code": "4900000000002",
+      "price_1": 1700,
+      "price_2": null
+    }
+  ]
+}

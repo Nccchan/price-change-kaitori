@@ -2,20 +2,23 @@
 
 ## プロジェクト概要
 
-競合店（ほむら東京・マッチョ）の買取価格を解析し、自社スプレッドシートの買取価格を自動更新するツール。
+競合店の買取価格を解析し、自社スプレッドシートの買取価格を自動更新するツール。
 
-## 競合店の対応方式
+## 基本運用方針
 
-| 競合店 | 方式 | 備考 |
-|--------|------|------|
-| ほむら東京（homura） | **ウェブ自動取得** | GitHub Actions で毎日自動実行 |
-| マッチョ（macho） | **画像貼り付け** | ウェブサイトなし。画像を渡してAI解析 |
+**メイン参照: ほむら東京（毎日ウェブ自動取得）**
+**サブ参照: 買取博士（毎日ウェブ自動取得）**
+
+マッチョはウェブスクレイピング不可・手動画像取得の手間があるため廃止。
+指示があった場合のみマッチョで上書き更新する。
+買取博士は自動取得ワークフロー稼働済み。サブ更新のマージン: BOX +200円 / カートン +200円（ほむらとは別設定）
 
 ## 日次ルーティン
 
-### ほむら東京（homura）
+### 1. ほむら東京の価格取得（メイン）
 
-GitHub Actions の「ホムラ価格取得」ワークフローが自動実行する。
+GitHub Actions の「ホムラ価格取得」ワークフローで3ゲーム（ポケモン・ワンピース・ドラゴンボール）の価格を取得し、スプレッドシートを更新する。
+**遊戯王は手動管理（スプレッドシート列構造の違いにより自動更新対象外）。**
 
 **⚠️ Claude Code（ウェブ版）からのトリガー方法**
 
@@ -42,23 +45,41 @@ Claude Code ウェブ版には `gh` CLI も GitHub workflow dispatch MCP ツー�
 
 自動実行されると `data/homura_MM_DD_GAME.json` が生成・コミットされる。
 
-### マッチョ（macho）
-
-画像を貼り付けてAIに解析させ、JSONを生成→スプレッドシート更新する。
+取得後、以下のコマンドでスプレッドシートを更新する:
 
 ```bash
-python main.py -i macho_MM_DD_onepiece.jpg -g onepiece --yes
-python main.py -i macho_MM_DD_dragonball.jpg -g dragonball --yes
-python main.py -i macho_MM_DD_yugioh.jpg -g yugioh --yes
+python main.py --from-json data/homura_MM_DD_pokemon.json    -g pokemon    --yes
+python main.py --from-json data/homura_MM_DD_onepiece.json   -g onepiece   --yes
+python main.py --from-json data/homura_MM_DD_dragonball.json -g dragonball --yes
 ```
 
-**⚠️ 重要: 全ゲーム分を実行したか必ず確認すること。実行漏れに注意。**
+※ 遊戯王は手動管理のため除外。
 
-### コミット＆プッシュ
+### 2. 買取博士の価格取得（サブ）
+
+GitHub Actions の「買取博士価格取得」ワークフローで価格を取得する。
+fetch-kaitorihakase.yml にはすでに push トリガーが設定済みのため、トリガーファイルをプッシュするだけでよい:
+
+1. **トリガーファイルをプッシュ**（`mcp__github__push_files` で `trigger-kaitorihakase` ファイルを作成）
+2. **完了を待つ**（約1〜2分。`mcp__github__list_commits` で `github-actions[bot]` のコミットを確認）
+3. **後片付け**: `mcp__github__delete_file` で `trigger-kaitorihakase` を削除
+4. **ローカルにフェッチ**: `git fetch origin <branch> && git checkout origin/<branch> -- data/kaitorihakase_MM_DD_*.json`
+
+取得後、以下のコマンドでスプレッドシートを更新する（マージン: BOX +200円 / カートン +200円）:
+
+```bash
+python main.py --from-json data/kaitorihakase_MM_DD_onepiece.json   -g onepiece   --margin-box 200 --margin-carton 200 --yes
+python main.py --from-json data/kaitorihakase_MM_DD_dragonball.json -g dragonball --margin-box 200 --margin-carton 200 --yes
+```
+
+※ ポケモンはほむらのみで管理。遊戯王は手動管理のため除外。
+※ ほむらとの比較後に実施し、博士がほむら+マージンを上回る場合のみ更新する。
+
+### 3. コミット＆プッシュ
 
 ```bash
 git add data/
-git commit -m "Add macho MM/DD price data and update spreadsheet"
+git commit -m "Add MM/DD price data and update spreadsheet"
 git push -u origin claude/clarify-capabilities-Q63XS
 ```
 
@@ -107,24 +128,20 @@ git push -u origin claude/clarify-capabilities-Q63XS
 
 ## マージン設定
 
-### ほむら東京（homura）
+### ほむら東京基準（メイン）
 
 | ゲーム | BOX / シュリンクあり | カートン / シュリンクなし |
 |--------|---------------------|--------------------------|
 | ポケモン | +200円 | +200円 |
-| ワンピース | +200円 | +1,000円 |
+| ワンピース | +200円 | +2,000円 |
 | ドラゴンボール | +200円 | +1,000円 |
-| 遊戯王 | +200円 | — |
+| 遊戯王 | 手動管理 | — |
 
-### マッチョ（macho）
+### 買取博士基準（サブ）
 
-| ゲーム | BOX / シュリンクあり | カートン / シュリンクなし |
-|--------|---------------------|--------------------------|
-| 全ゲーム共通 | +100円 | +1,000円 |
+| ゲーム | BOX | カートン |
+|--------|-----|---------|
+| ワンピース | +200円 | +200円 |
+| ドラゴンボール | +200円 | +200円 |
 
-```bash
-# マッチョ実行時のオプション例
-python main.py -i macho_MM_DD_onepiece.jpg -g onepiece --margin-box 100 --margin-carton 1000 --yes
-python main.py -i macho_MM_DD_dragonball.jpg -g dragonball --margin-box 100 --margin-carton 1000 --yes
-python main.py -i macho_MM_DD_yugioh.jpg -g yugioh --margin-box 100 --yes
-```
+**注意**: 博士はカートン価格が低めに設定されている商品がある。ほむら+マージンより低くなる場合はほむら価格を維持すること（ツールが自動判定）。

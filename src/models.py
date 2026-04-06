@@ -38,6 +38,7 @@ class GameType(str, Enum):
 class CompetitorType(str, Enum):
     HOMURA = "homura"
     MACHO = "macho"
+    KAITORIHAKASE = "kaitorihakase"
     OTHER = "other"
 
     @classmethod
@@ -52,6 +53,8 @@ class CompetitorType(str, Enum):
             "マッチョ買取": cls.MACHO,
             "macho": cls.MACHO,
             "macho_kaitori": cls.MACHO,
+            "買取博士": cls.KAITORIHAKASE,
+            "kaitorihakase": cls.KAITORIHAKASE,
         }
         if s in aliases:
             return aliases[s]
