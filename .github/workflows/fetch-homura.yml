@@ -2,6 +2,9 @@ name: ホムラ価格取得
 
 on:
   workflow_dispatch:
+  push:
+    branches: [claude/clarify-capabilities-Q63XS]
+    paths: ['trigger-homura']
 
 jobs:
   fetch:
