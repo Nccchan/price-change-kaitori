@@ -39,6 +39,7 @@ class CompetitorType(str, Enum):
     HOMURA = "homura"
     MACHO = "macho"
     KAITORIHAKASE = "kaitorihakase"
+    POKECA_MAX = "pokeca_max"
     OTHER = "other"
 
     @classmethod
@@ -55,6 +56,9 @@ class CompetitorType(str, Enum):
             "macho_kaitori": cls.MACHO,
             "買取博士": cls.KAITORIHAKASE,
             "kaitorihakase": cls.KAITORIHAKASE,
+            "pokeca_max": cls.POKECA_MAX,
+            "pokeca-max": cls.POKECA_MAX,
+            "pokeca": cls.POKECA_MAX,
         }
         if s in aliases:
             return aliases[s]

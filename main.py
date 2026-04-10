@@ -212,8 +212,16 @@ def main(
             click.echo("【Step 1】 買取博士ウェブサイトから価格を取得中...")
             fetcher = KaitorihakaseFetcher()
             comp = "kaitorihakase"
+        elif comp in ("pokeca-max", "pokeca_max", "pokeca"):
+            from src.pokeca_fetcher import PokecaFetcher
+            click.echo("【Step 1】 ポケカ買取チェッカーから価格を取得中...")
+            fetcher = PokecaFetcher()
+            comp = "pokeca_max"
         else:
-            click.echo(f"[ERROR] --fetch-web は homura / kaitorihakase のみ対応しています（指定: {comp}）", err=True)
+            click.echo(
+                f"[ERROR] --fetch-web は homura / kaitorihakase / pokeca-max のみ対応しています（指定: {comp}）",
+                err=True,
+            )
             sys.exit(1)
 
         try:

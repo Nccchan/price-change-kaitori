@@ -1,0 +1,42 @@
+name: ポケカ買取チェッカー価格取得
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/clarify-capabilities-Q63XS]
+    paths: ['trigger-pokeca']
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: チェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python セットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 依存パッケージをインストール
+        run: pip install -r requirements.txt
+
+      - name: ポケカ買取チェッカーから価格を取得
+        run: python scripts/fetch_pokeca.py
+
+      - name: JSONをコミット＆プッシュ
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/pokeca_*.json
+          if git diff --cached --quiet; then
+            echo "変更なし"
+          else
+            DATE=$(date '+%m/%d')
+            git commit -m "Auto: ポケカ買取チェッカー ${DATE} 価格データ取得"
+            git push
+          fi

@@ -89,6 +89,7 @@ COMPETITOR_NAMES = {
     "homura": "ほむら東京",
     "macho": "マッチョ買取",
     "kaitorihakase": "買取博士",
+    "pokeca_max": "ポケカ買取チェッカー（最高値）",
     "other": "その他",
 }
 
