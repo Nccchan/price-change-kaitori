@@ -1,0 +1,25 @@
+{
+  "competitor": "kaitorihakase",
+  "game": "yugioh",
+  "date": "2026/04/10",
+  "items": [
+    {
+      "name": "遊戯王 デュエルモンスターズ LIMIT OVER COLLECTION THE RIVALS",
+      "code": "遊戯王 デュエルモンスターズ LIMIT OVER COLLECTION THE RIVALS",
+      "price_1": 8000,
+      "price_2": 192000
+    },
+    {
+      "name": "遊戯王 ラッシュデュエル オーバーラッシュパック 2",
+      "code": "遊戯王 ラッシュデュエル オーバーラッシュパック 2",
+      "price_1": 7500,
+      "price_2": null
+    },
+    {
+      "name": "遊戯王オフィシャルカードゲーム デュエルモンスターズ LIMIT OVER COLLECTION – THE HEROES",
+      "code": "遊戯王オフィシャルカードゲーム デュエルモンスターズ LIMIT OVER COLLECTION – THE HEROES",
+      "price_1": 14700,
+      "price_2": 352800
+    }
+  ]
+}
