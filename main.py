@@ -294,6 +294,49 @@ def main(
     click.echo()
 
     # ------------------------------------------------------------------
+    # Step 3.4: Supabase 解決層（P2-A / 2026-06-09 起案）
+    # report-only。書込先（GAS Webhook）は変えない。
+    # HOMURA_RESOLVE_ENABLED=1 のときだけ実行。
+    # ------------------------------------------------------------------
+    try:
+        from src.supabase_resolver import HomuraSupabaseResolver
+    except Exception as _e:
+        HomuraSupabaseResolver = None  # type: ignore
+
+    if HomuraSupabaseResolver and HomuraSupabaseResolver.is_enabled_by_flag():
+        click.echo("【Step 3.4】 Supabase products.homura_ref で SKU 解決中（report-only）...")
+        resolver = HomuraSupabaseResolver.from_env()
+        if not resolver.enabled:
+            click.echo("  [SKIP] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY が未設定")
+        else:
+            codes = [item.code for item in competitor_data.items if getattr(item, "code", None)]
+            stats = resolver.stats(codes)
+            total = stats["total_unique_codes"]
+            hit = stats["resolved"]
+            miss = stats["unresolved"]
+            rate = stats["resolve_rate"] * 100
+            click.echo(
+                f"  完了: unique={total} / resolved={hit} ({rate:.1f}%) / unresolved={miss}"
+            )
+
+            # 未解決コードを TSV に保存
+            if miss:
+                import datetime as _dt
+                import os as _os
+                _data_dir = _os.path.join(_os.path.dirname(__file__), "data")
+                _os.makedirs(_data_dir, exist_ok=True)
+                _unresolved_path = _os.path.join(
+                    _data_dir,
+                    f"unresolved_homura_{game}_{_dt.date.today().isoformat()}.tsv",
+                )
+                with open(_unresolved_path, "w", encoding="utf-8") as _f:
+                    _f.write("homura_code\n")
+                    for c in stats["unresolved_codes"]:
+                        _f.write(f"{c}\n")
+                click.echo(f"  💡 未解決コード保存: {_unresolved_path}")
+        click.echo()
+
+    # ------------------------------------------------------------------
     # Step 3.5: 前日比較
     # ------------------------------------------------------------------
     daily_report_section = ""
