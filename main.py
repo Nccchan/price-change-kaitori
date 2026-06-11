@@ -401,6 +401,17 @@ def main(
     # ------------------------------------------------------------------
     if dry_run:
         click.echo("【DRY-RUN】 スプレッドシートの更新をスキップしました。")
+        # Phase A: フラグ時はSupabase二重書込もdry-runで検証（行は増やさない）
+        if os.getenv("ENABLE_SB_DUAL_WRITE") == "1":
+            try:
+                from src import supabase_writer
+                _payloads = comparator.build_update_payloads(
+                    game=game, comparison_results=results,
+                    current_items=current_items,
+                    next_available_row=len(current_items) + 2)
+                supabase_writer.write_prices(game, _payloads, dry_run=True)
+            except Exception as e:
+                click.echo(f"  ⚠️ SB dual-write(dry-run)失敗: {e}")
         return
 
     if not yes:
@@ -427,6 +438,19 @@ def main(
         )
         updated_cells = writer.write_prices(game, payloads)
         click.echo(f"  完了: {updated_cells} セルを更新しました")
+
+        # Phase A: Supabase price_history への二重書込（フラグ時のみ）。
+        # ここでの失敗はシート書込（成功済）を絶対に巻き込まない。
+        if os.getenv("ENABLE_SB_DUAL_WRITE") == "1":
+            try:
+                from src import supabase_writer
+                supabase_writer.write_prices(game, payloads, dry_run=False)
+            except Exception as e:
+                click.echo(f"  ⚠️ SB dual-write失敗（シート書込は成功済）: {e}")
+                try:
+                    supabase_writer._notify(f"⚠️ SB dual-write失敗 ({game}): {e}")
+                except Exception:
+                    pass
 
         new_count = sum(1 for p in payloads if p.is_new)
         if new_count > 0:
