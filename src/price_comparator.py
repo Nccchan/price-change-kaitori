@@ -196,7 +196,12 @@ class PriceComparator:
             payloads.append(
                 UpdatePayload(
                     row_index=row_idx,
-                    name=result.name,
+                    # GasWriter はシート行を「名前」でマッチするため、既存行が
+                    # 見つかった場合はシート上の実名称を使う。競合(ホムラ)側が
+                    # 別表記(例: EB-02 英語名 "Anime 25th collection" / シートは
+                    # 日本語 "アニメ25thコレクション")だと、競合名のままでは GAS が
+                    # 行を見つけられず黙って skip し、価格が固着する。
+                    name=(current.name if (current is not None and current.name) else result.name),
                     code=result.code,
                     new_price_1=result.recommended_price_1,
                     new_price_2=result.recommended_price_2,
