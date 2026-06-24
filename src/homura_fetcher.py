@@ -22,7 +22,9 @@ class HomuraFetcher:
     # price_1: シュリンクあり (pokemon) / BOX (others)
     # price_2: シュリンクなし (pokemon) / カートン (others)
     CATEGORY_IDS: Dict[GameType, Dict[str, Optional[int]]] = {
-        GameType.POKEMON:    {"price_1": 128, "price_2": 129},
+        # price_1_extra: price_1 と同じ扱い(=BOX/シュリンクあり相当)で追加取得するサブカテゴリ。
+        # ポケモンの 130 = スペシャル/プロモ枠（25thプロモパック等の単品物）。
+        GameType.POKEMON:    {"price_1": 128, "price_2": None, "price_1_extra": [130]},
         GameType.ONEPIECE:   {"price_1": 132, "price_2": 133},
         GameType.DRAGONBALL: {"price_1": 171, "price_2": None},  # カートンIDは未確認
         GameType.YUGIOH:     {"price_1": 159, "price_2": 172},
@@ -45,6 +47,10 @@ class HomuraFetcher:
 
         items_1 = self._fetch_category(cat_1) if cat_1 else []
         items_2 = self._fetch_category(cat_2) if cat_2 else []
+
+        # price_1_extra: スペシャル/プロモ枠を price_1 相当として合流。
+        for ec in (cat_ids.get("price_1_extra") or []):
+            items_1 += self._fetch_category(ec)
 
         merged = self._merge(items_1, items_2, game)
         today_str = today or date.today().strftime("%Y/%m/%d")
@@ -130,7 +136,7 @@ class HomuraFetcher:
             price: Optional[int] = None
             for span in card_div.find_all("span"):
                 text = span.get_text(strip=True)
-                m = re.search(r"^([\d,]+)円$", text)
+                m = re.search(r"¥\s*([\d,]+)", text)
                 if m:
                     price = int(m.group(1).replace(",", ""))
                     break
