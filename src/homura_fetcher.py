@@ -147,8 +147,11 @@ class HomuraFetcher:
         return items
 
     def _clean_name(self, name: str) -> str:
-        """商品名から余分なプレフィックス（「BOX」など）を除去"""
+        """商品名から余分なプレフィックス（「BOX」など）と末尾の※注釈を除去。
+        例: 'ポケモンカード Classic ※輸送箱未開封' → 'ポケモンカード Classic'
+        （※注釈があると②買取価格表の行名と照合できず価格が更新されない）"""
         name = re.sub(r"^[「【].*?[」】]\s*", "", name)
+        name = re.sub(r"\s*※.*$", "", name)
         return name.strip()
 
     def _extract_inline_code(self, name: str) -> tuple[Optional[str], str]:
