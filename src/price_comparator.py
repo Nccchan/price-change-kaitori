@@ -209,7 +209,14 @@ class PriceComparator:
                 )
             )
 
-        return payloads
+        from src.price_guard import guard_payloads
+        accepted, violations = guard_payloads(game, payloads)
+        for violation in violations:
+            print(
+                f"  [REJECT] {violation.name} ({violation.code}): "
+                f"BOX={violation.box} NS={violation.ns} / {violation.reason}"
+            )
+        return accepted
 
     def get_attention_items(
         self, results: List[ComparisonResult]

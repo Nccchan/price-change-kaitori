@@ -22,6 +22,11 @@ class GasWriter:
 
     def write_prices(self, game: str, payloads: List[UpdatePayload]) -> int:
         import requests as _req
+        from src.price_guard import guard_payloads
+
+        payloads, violations = guard_payloads(game, payloads)
+        for v in violations:
+            print(f"[price-guard] rejected {v.code}: BOX={v.box} NS={v.ns}")
 
         sheet_name = SHEET_NAMES.get(game)
         if not sheet_name:
@@ -139,6 +144,11 @@ class SheetsWriter:
         Returns:
             更新セル数
         """
+        from src.price_guard import guard_payloads
+        payloads, violations = guard_payloads(game, payloads)
+        for v in violations:
+            print(f"[price-guard] rejected {v.code}: BOX={v.box} NS={v.ns}")
+
         sheet_name = SHEET_NAMES.get(game)
         if not sheet_name:
             raise ValueError(f"Unknown game: {game}")
