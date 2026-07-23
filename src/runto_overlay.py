@@ -22,6 +22,11 @@ GAME_CONFIG = {
     "dragonball": ("dg", 5, "op"),
 }
 
+# 通常BOXと、同名を含むセット／プロモ等を部分一致で混同しない。
+# 例: 「イーブイヒーローズ」へ「イーブイヒーローズ イーブイズセット」
+# (¥300,000) を紐付けると通常BOXが2倍超に暴騰する。
+VARIANT_TOKENS = ("セット", "プロモ", "カートン", "デッキ", "スペシャル", "コレクション")
+
 
 @dataclass(frozen=True)
 class RuntoSelection:
@@ -88,7 +93,17 @@ def _match(title: str, items: Iterable[CardItem]) -> Optional[CardItem]:
     exact = [item for item in items if _norm(item.name) == title_name and title_name]
     if len(exact) == 1:
         return exact[0]
-    partial = [item for item in items if min(len(_norm(item.name)), len(title_name)) >= 4 and (_norm(item.name) in title_name or title_name in _norm(item.name))]
+    partial = []
+    for item in items:
+        item_name = _norm(item.name)
+        if min(len(item_name), len(title_name)) < 4:
+            continue
+        if not (item_name in title_name or title_name in item_name):
+            continue
+        # 外部タイトルだけにvariant語がある場合、通常商品への救済的部分一致を禁止。
+        if any(token in title and token not in (item.name or "") for token in VARIANT_TOKENS):
+            continue
+        partial.append(item)
     return partial[0] if len(partial) == 1 else None
 
 

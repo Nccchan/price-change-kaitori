@@ -39,6 +39,17 @@ class RuntoOverlayTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             apply_runto_max("pokemon", data, 200, 200, [("unrelated", 1, 1)])
 
+    def test_special_set_does_not_overwrite_regular_box(self):
+        item = CardItem(name="イーブイヒーローズ", code="S6a", price_1=140000)
+        data = self.data(GameType.POKEMON, item)
+        selected, matched = apply_runto_max("pokemon", data, 200, 200, [
+            ("強化拡張パック イーブイヒーローズ", 138000, 138000),
+            ("強化拡張パック イーブイヒーローズ イーブイズセット", 300000, 300000),
+        ])
+        self.assertEqual(matched, 1)
+        self.assertEqual(selected, [])
+        self.assertEqual(item.price_1, 140000)
+
 
 if __name__ == "__main__":
     unittest.main()
