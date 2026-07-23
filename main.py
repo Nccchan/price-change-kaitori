@@ -131,6 +131,12 @@ def _find_previous_json(current_path: str, game: str) -> Optional[str]:
     metavar="ID",
     help="Google Sheets スプレッドシート ID（環境変数 SPREADSHEET_ID より優先）",
 )
+@click.option(
+    "--only-name",
+    default=None,
+    metavar="PRODUCT_NAME",
+    help="指定商品名だけを処理する（1弾検証用・完全一致）",
+)
 def main(
     image: tuple,
     from_json: Optional[str],
@@ -144,6 +150,7 @@ def main(
     margin_carton: Optional[int],
     output: Optional[str],
     spreadsheet_id: Optional[str],
+    only_name: Optional[str],
 ):
     """トレーディングカード買取価格更新ツール"""
 
@@ -267,6 +274,16 @@ def main(
             sys.exit(1)
 
     competitor_name = COMPETITOR_NAMES.get(competitor_data.competitor.value, competitor_data.competitor.value)
+    if only_name:
+        selected = [item for item in competitor_data.items if item.name.strip() == only_name.strip()]
+        if len(selected) != 1:
+            click.echo(
+                f"[ERROR] --only-name '{only_name}' は1商品に特定できません（該当: {len(selected)}件）",
+                err=True,
+            )
+            sys.exit(1)
+        competitor_data.items = selected
+        click.echo(f"  対象限定: {only_name}（1商品）")
     click.echo(f"  完了: {competitor_name} / {len(competitor_data.items)} 商品を抽出")
     click.echo()
 
