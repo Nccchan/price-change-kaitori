@@ -294,6 +294,30 @@ def main(
     click.echo(f"  完了: {competitor_name} / {len(competitor_data.items)} 商品を抽出")
     click.echo()
 
+    # ホムラ単独値を承認判定へ渡さない。先にラントゥと合流し、最終推奨値を確定する。
+    # 取得・パース・照合が失敗した場合は安い値へフォールバックせずバッチを停止する。
+    if fetch_web and comp == "homura" and game in ("pokemon", "onepiece", "dragonball"):
+        click.echo("【Step 1.5】ラントゥ666と突合し max(ホムラ, ラントゥ) を確定中...")
+        try:
+            from src.runto_overlay import apply_runto_max
+            # 既存auto_maxの確定仕様: ラントゥは BOX +200 / CTN +2,000。
+            # ホムラ側のゲーム別マージンと異なる場合でも、各ソースの最終値でmaxを取る。
+            runto_selections, runto_matched = apply_runto_max(
+                game, competitor_data, effective_margin_box, effective_margin_carton,
+                runto_margin_second=(2000 if game in ("onepiece", "dragonball") else effective_margin_carton),
+            )
+        except Exception as e:
+            click.echo(f"\n[ERROR] ラントゥ突合に失敗したため安全停止しました: {e}", err=True)
+            sys.exit(1)
+        click.echo(f"  完了: 照合 {runto_matched}件 / ラントゥ採用 {len(runto_selections)}価格")
+        for selection in runto_selections:
+            homura = f"¥{selection.homura_final:,}" if selection.homura_final is not None else "未掲載"
+            click.echo(
+                f"  [RUNTO] {selection.name} ({selection.code or '型番なし'}) {selection.unit}: "
+                f"ホムラ{homura} / ラントゥ¥{selection.runto_final:,} → ¥{selection.final:,}"
+            )
+        click.echo()
+
     # ------------------------------------------------------------------
     # Step 2: 現行価格を Google Sheets から読み込み
     # ------------------------------------------------------------------
