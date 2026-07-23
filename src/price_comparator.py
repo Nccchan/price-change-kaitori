@@ -181,6 +181,11 @@ class PriceComparator:
         new_row = next_available_row
 
         for result in comparison_results:
+            # 型番空欄の新商品は一意なSKUへ解決できないため自動追加しない。
+            # GAS側の暗黙skipに依存せず、ペイロード生成段階でfail closedにする。
+            if result.is_new and not (result.code or "").strip():
+                print(f"  [SKIP] {result.name}: 型番空欄の新商品は自動追加対象外")
+                continue
             # 対応する現行アイテムを再検索してrow_indexを取得
             current = _find_match(
                 CardItem(name=result.name, code=result.code),
