@@ -18,13 +18,30 @@ from src.models import CardItem, CompetitorData, CompetitorType, GameType
 class HomuraFetcher:
     BASE_URL = "https://kaitori-homura.com"
 
+    # 公開トレカカテゴリの棚卸し。mode=auto のみ標準価格更新へ流す。
+    CATEGORY_REGISTRY = {
+        128: {"name": "pokemon_box", "game": "pokemon", "unit": "BOX", "mode": "auto"},
+        129: {"name": "pokemon_ns", "game": "pokemon", "unit": "NS", "mode": "auto"},
+        130: {"name": "pokemon_special", "game": "pokemon", "unit": "MIXED", "mode": "monitor"},
+        131: {"name": "pokemon_carton", "game": "pokemon", "unit": "CARTON", "mode": "monitor"},
+        183: {"name": "loose_pack", "game": "pokemon", "unit": "PACK", "mode": "monitor"},
+        132: {"name": "onepiece_box", "game": "onepiece", "unit": "BOX", "mode": "auto"},
+        133: {"name": "onepiece_carton", "game": "onepiece", "unit": "CARTON", "mode": "auto"},
+        160: {"name": "onepiece_other", "game": "onepiece", "unit": "MIXED", "mode": "monitor"},
+        159: {"name": "yugioh_box", "game": "yugioh", "unit": "BOX", "mode": "monitor"},
+        172: {"name": "yugioh_carton", "game": "yugioh", "unit": "CARTON", "mode": "monitor"},
+        157: {"name": "single_card", "game": None, "unit": "SINGLE", "mode": "manual"},
+        171: {"name": "dragonball_box", "game": "dragonball", "unit": "BOX", "mode": "auto"},
+    }
+
     # ゲーム × price種別 → サブカテゴリID
     # price_1: シュリンクあり (pokemon) / BOX (others)
     # price_2: シュリンクなし (pokemon) / カートン (others)
     CATEGORY_IDS: Dict[GameType, Dict[str, Optional[int]]] = {
         # price_1_extra: price_1 と同じ扱い(=BOX/シュリンクあり相当)で追加取得するサブカテゴリ。
         # ポケモンの 130 = スペシャル/プロモ枠（25thプロモパック等の単品物）。
-        GameType.POKEMON:    {"price_1": 128, "price_2": None, "price_1_extra": [130]},
+        # ID 130 は単位混在のため price_1_extra に入れない。監視専用。
+        GameType.POKEMON:    {"price_1": 128, "price_2": 129},
         GameType.ONEPIECE:   {"price_1": 132, "price_2": 133},
         GameType.DRAGONBALL: {"price_1": 171, "price_2": None},  # カートンIDは未確認
         GameType.YUGIOH:     {"price_1": 159, "price_2": 172},
@@ -150,9 +167,19 @@ class HomuraFetcher:
         """商品名から余分なプレフィックス（「BOX」など）と末尾の※注釈を除去。
         例: 'ポケモンカード Classic ※輸送箱未開封' → 'ポケモンカード Classic'
         （※注釈があると②買取価格表の行名と照合できず価格が更新されない）"""
-        name = re.sub(r"^[「【].*?[」】]\s*", "", name)
+        # BOX/NS等の状態プレフィクスを除去。スペシャルセット等は別カテゴリなので
+        # 標準BOX/NS結合には流れず、この除去による単位混入は起きない。
+        name = re.sub(r"^[「【〖].*?[」】〗]\s*", "", name)
         name = re.sub(r"\s*※.*$", "", name)
         return name.strip()
+
+    def fetch_all_category_inventory(self) -> Dict[int, List[Dict]]:
+        """全公開トレカカテゴリを取得する。書込は行わず監視・監査に使用する。"""
+        return {
+            category_id: self._fetch_category(category_id)
+            for category_id, meta in self.CATEGORY_REGISTRY.items()
+            if meta["mode"] != "manual"
+        }
 
     def _extract_inline_code(self, name: str) -> tuple[Optional[str], str]:
         """名前の先頭にある型式コード (OP-01, PRB-01, EB-01, FB-01 等) を抽出する。
