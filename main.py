@@ -137,6 +137,12 @@ def _find_previous_json(current_path: str, game: str) -> Optional[str]:
     metavar="PRODUCT_NAME",
     help="指定商品名だけを処理する（1弾検証用・完全一致）",
 )
+@click.option(
+    "--approve-price-decreases",
+    is_flag=True,
+    default=False,
+    help="承認済みの大幅値下げを保留せず反映する",
+)
 def main(
     image: tuple,
     from_json: Optional[str],
@@ -151,6 +157,7 @@ def main(
     output: Optional[str],
     spreadsheet_id: Optional[str],
     only_name: Optional[str],
+    approve_price_decreases: bool,
 ):
     """トレーディングカード買取価格更新ツール"""
 
@@ -310,7 +317,10 @@ def main(
     results = comparator.compare(game, competitor_data, current_items)
     attention_items = comparator.get_attention_items(results)
     large_changes = comparator.get_large_changes(results)
+    decrease_holds = comparator.get_decrease_holds(game, results)
     click.echo(f"  完了: 要対応 {len(attention_items)} 商品 / 大幅変動 {len(large_changes)} 商品")
+    if decrease_holds and not approve_price_decreases:
+        click.echo(f"  大幅値下げ要承認: {len(decrease_holds)}件（自動反映から除外）")
     click.echo()
 
     # ------------------------------------------------------------------
@@ -401,6 +411,9 @@ def main(
     )
     change_summary = reporter.generate_change_summary(results, labels)
     parts = [report, change_summary]
+    if decrease_holds and not approve_price_decreases:
+        from src.price_decrease_guard import format_holds
+        parts.append("## 大幅値下げ・要承認\n\n" + format_holds(decrease_holds))
     if daily_report_section:
         parts.append(daily_report_section)
     full_report = "\n\n".join(parts)
@@ -428,7 +441,8 @@ def main(
                 _payloads = comparator.build_update_payloads(
                     game=game, comparison_results=results,
                     current_items=current_items,
-                    next_available_row=len(current_items) + 2)
+                    next_available_row=len(current_items) + 2,
+                    approve_large_decreases=approve_price_decreases)
                 supabase_writer.write_prices(game, _payloads, dry_run=True)
             except Exception as e:
                 click.echo(f"  ⚠️ SB dual-write(dry-run)失敗: {e}")
@@ -455,7 +469,15 @@ def main(
             comparison_results=results,
             current_items=current_items,
             next_available_row=next_row,
+            approve_large_decreases=approve_price_decreases,
         )
+        if decrease_holds and not approve_price_decreases:
+            try:
+                from src.price_decrease_guard import format_holds
+                from src import supabase_writer as _sb_notify
+                _sb_notify._notify(format_holds(decrease_holds))
+            except Exception as e:
+                click.echo(f"  ⚠️ 大幅値下げ一覧のTelegram通知失敗: {e}")
         updated_cells = writer.write_prices(game, payloads)
         click.echo(f"  完了: {updated_cells} セルを更新しました")
 

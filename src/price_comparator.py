@@ -170,6 +170,7 @@ class PriceComparator:
         comparison_results: List[ComparisonResult],
         current_items: List[CardItem],
         next_available_row: int,
+        approve_large_decreases: bool = False,
     ) -> List[UpdatePayload]:
         """
         スプレッドシート更新用のペイロードリストを生成する。
@@ -193,6 +194,16 @@ class PriceComparator:
                 row_idx = new_row
                 new_row += 1
 
+            new_price_1 = result.recommended_price_1
+            new_price_2 = result.recommended_price_2
+            if not approve_large_decreases:
+                from src.price_decrease_guard import evaluate_result
+                for hold in evaluate_result(game, result):
+                    if hold.unit == "BOX":
+                        new_price_1 = None
+                    else:
+                        new_price_2 = None
+
             payloads.append(
                 UpdatePayload(
                     row_index=row_idx,
@@ -203,8 +214,8 @@ class PriceComparator:
                     # 行を見つけられず黙って skip し、価格が固着する。
                     name=(current.name if (current is not None and current.name) else result.name),
                     code=result.code,
-                    new_price_1=result.recommended_price_1,
-                    new_price_2=result.recommended_price_2,
+                    new_price_1=new_price_1,
+                    new_price_2=new_price_2,
                     is_new=(current is None),
                 )
             )
@@ -217,6 +228,10 @@ class PriceComparator:
                 f"BOX={violation.box} NS={violation.ns} / {violation.reason}"
             )
         return accepted
+
+    def get_decrease_holds(self, game: str, results: List[ComparisonResult]):
+        from src.price_decrease_guard import evaluate_result
+        return [hold for result in results for hold in evaluate_result(game, result)]
 
     def get_attention_items(
         self, results: List[ComparisonResult]
