@@ -15,6 +15,7 @@ import re
 import json
 import urllib.request
 import urllib.parse
+import unicodedata
 from datetime import datetime, timezone
 
 # ---- 認証読込（org 側 .env.local / .env から。環境変数優先）---------------------
@@ -120,21 +121,57 @@ def _sku_to_id(active_ids, sku):
     return active_ids.get(sku)
 
 
+def _normalize_name(value):
+    value = unicodedata.normalize("NFKC", value or "").lower().strip()
+    value = re.sub(r"^[「【〖].*?[」】〗]\s*", "", value)
+    value = re.sub(r"\s*※.*$", "", value)
+    return re.sub(r"[\s　()（）・]+", "", value)
+
+
+def _resolve_by_name(name, unit, product_rows):
+    """正規化名が一意な場合だけSKUを返す。0件/複数件は fail closed。"""
+    target = _normalize_name(name)
+    if not target:
+        return None, "missing-name"
+    suffix = _UNIT_SUFFIX[unit]
+    matches = [
+        row["sku"] for row in product_rows
+        if row.get("sku", "").endswith(suffix)
+        and _normalize_name(row.get("name_jp")) == target
+    ]
+    if len(matches) == 1:
+        return matches[0], "name"
+    return None, "ambiguous-name" if len(matches) > 1 else "unresolved-name"
+
+
+def _resolve_product(game, code, name, unit, active, product_rows):
+    sku = _resolve_sku(game, code, unit, active)
+    if sku:
+        return sku, "code"
+    return _resolve_by_name(name, unit, product_rows)
+
+
 # ---- メイン書込 ----------------------------------------------------------------
 def write_prices(game, payloads, dry_run=False):
     """payloads: main.py の UpdatePayload リスト（.code / .new_price_1(BOX) / .new_price_2 / .is_new）。
     price_2 列はゲーム別に NS(pokemon) または CARTON(その他)。
     """
+    from src.price_guard import guard_payloads
+    payloads, violations = guard_payloads(game, payloads)
+    for v in violations:
+        print(f"[price-guard] rejected {v.code}: BOX={v.box} NS={v.ns}")
+
     if game not in _PREFIX:
         print(f"[sb-dual-write] 未対応ゲーム: {game}")
         return
 
     # products: sku→id（active）
-    id_rows, page, offset = {}, 1000, 0
+    id_rows, product_rows, page, offset = {}, [], 1000, 0
     while True:
-        rows = _rest(f"products?select=id,sku&is_active=eq.true&limit={page}&offset={offset}")
+        rows = _rest(f"products?select=id,sku,name_jp,homura_ref&is_active=eq.true&limit={page}&offset={offset}")
         for row in rows:
             id_rows[row["sku"]] = row["id"]
+            product_rows.append(row)
         if len(rows) < page:
             break
         offset += page
@@ -150,22 +187,22 @@ def write_prices(game, payloads, dry_run=False):
         code = getattr(p, "code", "") or ""
         # BOX (price_1)
         if getattr(p, "new_price_1", None) is not None:
-            sku = _resolve_sku(game, code, "BOX", active)
+            sku, method = _resolve_product(game, code, getattr(p, "name", ""), "BOX", active, product_rows)
             if sku:
                 rows.append({"product_id": id_rows[sku], "kind": "kaitori", "unit": "BOX",
                              "currency": "JPY", "value": int(p.new_price_1),
                              "source": "price-change-kaitori", "valid_from": now})
             else:
-                unresolved.append(f"{code}/BOX")
+                unresolved.append(f"{code or getattr(p, 'name', '')}/BOX:{method}")
         # price_2 (NS or CARTON)
         if getattr(p, "new_price_2", None) is not None:
-            sku = _resolve_sku(game, code, p2_unit, active)
+            sku, method = _resolve_product(game, code, getattr(p, "name", ""), p2_unit, active, product_rows)
             if sku:
                 rows.append({"product_id": id_rows[sku], "kind": "kaitori", "unit": p2_unit,
                              "currency": "JPY", "value": int(p.new_price_2),
                              "source": "price-change-kaitori", "valid_from": now})
             else:
-                unresolved.append(f"{code}/{p2_unit}")
+                unresolved.append(f"{code or getattr(p, 'name', '')}/{p2_unit}:{method}")
 
     if dry_run:
         print(f"[sb-dual-write DRY-RUN] {game}: insert予定 {len(rows)} 行 / 未解決 {len(unresolved)}件")
