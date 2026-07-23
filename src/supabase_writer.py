@@ -125,6 +125,8 @@ def _normalize_name(value):
     value = unicodedata.normalize("NFKC", value or "").lower().strip()
     value = re.sub(r"^[「【〖].*?[」】〗]\s*", "", value)
     value = re.sub(r"\s*※.*$", "", value)
+    # products.name_jp の単位注記は、unit/SKU suffix で既に絞るため除去可能。
+    value = re.sub(r"\s*[\(（](?:シュリンクなし|シュリンク無し|カートン|パック)[\)）]\s*$", "", value)
     return re.sub(r"[\s　()（）・]+", "", value)
 
 

@@ -5,7 +5,7 @@ from src.supabase_writer import _resolve_by_name, _resolve_product
 
 ROWS = [
     {"sku": "PKM-M5-BOX", "name_jp": "アビスアイ"},
-    {"sku": "PKM-M5-NS", "name_jp": "アビスアイ"},
+    {"sku": "PKM-M5-NS", "name_jp": "アビスアイ（シュリンクなし）"},
 ]
 
 
