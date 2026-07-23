@@ -152,7 +152,6 @@ def main(
     # ------------------------------------------------------------------
     from src.config import SPREADSHEET_ID, MARGINS, PRICE_LABELS, COMPETITOR_NAMES
     from src.gviz_reader import GVizReader
-    from src.image_analyzer import ImageAnalyzer
     from src.price_comparator import PriceComparator, compare_daily
     from src.report_generator import ReportGenerator
     from src.sheets_writer import SheetsWriter, GasWriter
@@ -195,7 +194,7 @@ def main(
     # ------------------------------------------------------------------
     # Step 1: 競合価格データを取得（ウェブ取得 / JSONファイル / 画像解析）
     # ------------------------------------------------------------------
-    analyzer = ImageAnalyzer()
+    analyzer = None
     if fetch_web:
         from src.homura_fetcher import HomuraFetcher
         from src.models import GameType as _GameType
@@ -233,6 +232,8 @@ def main(
         click.echo(f"  保存: {_json_path}")
 
     elif from_json:
+        from src.image_analyzer import ImageAnalyzer
+        analyzer = ImageAnalyzer()
         click.echo(f"【Step 1】 JSONファイルから競合データを読み込み中: {from_json}")
         try:
             import json as _json
@@ -243,6 +244,8 @@ def main(
             click.echo(f"\n[ERROR] JSONファイルの読み込みに失敗しました: {e}", err=True)
             sys.exit(1)
     else:
+        from src.image_analyzer import ImageAnalyzer
+        analyzer = ImageAnalyzer()
         click.echo("【Step 1】 競合価格表画像を解析中...")
         try:
             if len(image) == 1:
