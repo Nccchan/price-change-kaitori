@@ -35,6 +35,7 @@ SHEET_COLUMNS = {
 # dragonball/onepiece/yugioh の列構造:
 #   A(0)=空, B(1)=商品名, C(2)=型式, D(3)=BOX価格, E(4)=カートン価格
 SHEET_COLUMNS_OVERRIDE = {
+    "pokemon":     {**SHEET_COLUMNS, "name_col": 1, "code_col": 2, "price1_col": 3, "price2_col": 4},
     "onepiece":    {**SHEET_COLUMNS, "name_col": 1, "code_col": 2, "price1_col": 3, "price2_col": 4},
     "dragonball":  {**SHEET_COLUMNS, "name_col": 1, "code_col": 2, "price1_col": 3, "price2_col": 4},
     "yugioh":      {**SHEET_COLUMNS, "name_col": 1, "code_col": 2, "price1_col": 3, "price2_col": 4},
