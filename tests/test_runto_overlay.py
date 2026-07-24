@@ -1,7 +1,7 @@
 import unittest
 
 from src.models import CardItem, CompetitorData, CompetitorType, GameType
-from src.runto_overlay import apply_runto_max
+from src.runto_overlay import apply_runto_max, _parse_onepiece_variations
 
 
 class RuntoOverlayTests(unittest.TestCase):
@@ -49,6 +49,31 @@ class RuntoOverlayTests(unittest.TestCase):
         self.assertEqual(matched, 1)
         self.assertEqual(selected, [])
         self.assertEqual(item.price_1, 140000)
+
+    def test_onepiece_variations_select_shrink_and_carton(self):
+        variation_json = """[
+          {"attributes":{"attribute_pa_shrink":"5"},"display_price":11000,"variation_id":1,"variation_is_active":true,"variation_is_visible":true,"is_in_stock":true},
+          {"attributes":{"attribute_pa_shrink":"ari"},"display_price":13000,"variation_id":2,"variation_is_active":true,"variation_is_visible":true,"is_in_stock":true},
+          {"attributes":{"attribute_pa_shrink":"case"},"display_price":180000,"variation_id":3,"variation_is_active":true,"variation_is_visible":true,"is_in_stock":true}
+        ]""".replace('"', '&quot;')
+        page = f'''<form class="variations_form" data-product_variations="{variation_json}">
+          <select id="pa_shrink" name="attribute_pa_shrink">
+            <option value="5">テープカット</option><option value="ari">シュリンク有</option><option value="case">カートン</option>
+          </select></form>'''
+        product = _parse_onepiece_variations("決戦の刻【OP-16】", "https://example.test/op16", page)
+        self.assertEqual((product.box, product.carton), (13000, 180000))
+        self.assertEqual((product.box_variation_id, product.carton_variation_id), (2, 3))
+
+    def test_duplicate_box_variation_fails_closed(self):
+        variation_json = """[
+          {"attributes":{"attribute_pa_shrink":"ari"},"display_price":13000,"variation_id":2,"variation_is_active":true,"variation_is_visible":true,"is_in_stock":true},
+          {"attributes":{"attribute_pa_shrink":"ari"},"display_price":14000,"variation_id":4,"variation_is_active":true,"variation_is_visible":true,"is_in_stock":true},
+          {"attributes":{"attribute_pa_shrink":"case"},"display_price":180000,"variation_id":3,"variation_is_active":true,"variation_is_visible":true,"is_in_stock":true}
+        ]""".replace('"', '&quot;')
+        page = f'''<form data-product_variations="{variation_json}"><select id="pa_shrink">
+          <option value="ari">シュリンク有</option><option value="case">カートン</option></select></form>'''
+        with self.assertRaisesRegex(ValueError, "有効variationが2件"):
+            _parse_onepiece_variations("決戦の刻【OP-16】", "x", page)
 
 
 if __name__ == "__main__":

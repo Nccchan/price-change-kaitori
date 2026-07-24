@@ -5,6 +5,7 @@
 """
 from dataclasses import dataclass
 import html as html_lib
+import json
 import re
 import urllib.error
 import urllib.request
@@ -16,6 +17,12 @@ from src.models import CardItem, CompetitorData
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 TITLE_RE = re.compile(r'<h2[^>]*woocommerce-loop-product__title[^>]*>([^<]+)</h2>')
 AMOUNT_RE = re.compile(r'<bdi[^>]*>(?:<span[^>]*>[^<]*</span>)?([0-9,]+)</bdi>')
+PRODUCT_LINK_RE = re.compile(
+    r'<a[^>]+href=["\']([^"\']+)["\'][^>]*class=["\'][^"\']*woocommerce-LoopProduct-link[^"\']*["\'][^>]*>',
+    re.I,
+)
+VARIATION_DATA_RE = re.compile(r'data-product_variations="([^"]+)"', re.I)
+CODE_RE = re.compile(r'【((?:OP|EB|PRB)-?\d{2})】', re.I)
 GAME_CONFIG = {
     "pokemon": ("card", 11, "pkm"),
     "onepiece": ("onepiece", 4, "op"),
@@ -38,13 +45,114 @@ class RuntoSelection:
     final: int
 
 
+@dataclass(frozen=True)
+class RuntoVariationProduct:
+    code: str
+    title: str
+    url: str
+    box: int
+    carton: int
+    box_variation_id: int
+    carton_variation_id: int
+
+
 def _get(url: str) -> str:
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     with urllib.request.urlopen(req, timeout=30) as response:
         return response.read().decode("utf-8", errors="replace")
 
 
+def _variation_labels(page_html: str) -> Dict[str, str]:
+    """pa_shrink の value→表示名を読む（ari→シュリンク有、case→カートン等）。"""
+    match = re.search(r'<select[^>]+(?:id="pa_shrink"|name="attribute_pa_shrink")[^>]*>(.*?)</select>', page_html, re.I | re.S)
+    if not match:
+        return {}
+    return {
+        html_lib.unescape(value): re.sub(r'<[^>]+>', '', html_lib.unescape(label)).strip()
+        for value, label in re.findall(r'<option[^>]+value="([^"]+)"[^>]*>(.*?)</option>', match.group(1), re.I | re.S)
+        if value
+    }
+
+
+def _parse_onepiece_variations(title: str, url: str, page_html: str) -> RuntoVariationProduct:
+    code_match = CODE_RE.search(title)
+    if not code_match:
+        raise ValueError(f"セットコード不明: {title}")
+    code = code_match.group(1).upper()
+    data_match = VARIATION_DATA_RE.search(page_html)
+    if not data_match:
+        raise ValueError(f"variation JSONなし: {code}")
+    try:
+        variations = json.loads(html_lib.unescape(data_match.group(1)))
+    except (ValueError, TypeError) as exc:
+        raise ValueError(f"variation JSON解析失敗: {code}") from exc
+    labels = _variation_labels(page_html)
+    accepted: Dict[str, List[Tuple[int, int]]] = {"BOX": [], "CARTON": []}
+    for variation in variations:
+        attrs = variation.get("attributes") or {}
+        raw = attrs.get("attribute_pa_shrink")
+        label = labels.get(raw, raw or "")
+        unit = {"シュリンク有": "BOX", "カートン": "CARTON"}.get(label)
+        if unit is None:  # テープカット・未知属性は自動対象外
+            continue
+        active = variation.get("variation_is_active") is True and variation.get("variation_is_visible") is True
+        in_stock = variation.get("is_in_stock")
+        if in_stock is None:
+            in_stock = "in-stock" in (variation.get("availability_html") or "")
+        if not active or not in_stock:
+            continue
+        price = variation.get("display_price")
+        variation_id = variation.get("variation_id")
+        if not isinstance(price, (int, float)) or not isinstance(variation_id, int):
+            continue
+        accepted[unit].append((variation_id, int(price)))
+    for unit, values in accepted.items():
+        if len(values) != 1:
+            raise ValueError(f"{code} {unit}: 有効variationが{len(values)}件（1件必須）")
+    box_id, box = accepted["BOX"][0]
+    carton_id, carton = accepted["CARTON"][0]
+    return RuntoVariationProduct(code, title, url, box, carton, box_id, carton_id)
+
+
+def fetch_onepiece_variations() -> List[RuntoVariationProduct]:
+    """カテゴリからセットコード付き商品を列挙し、個別variation価格を取得する。"""
+    links: Dict[str, Tuple[str, str]] = {}
+    for page in range(1, GAME_CONFIG["onepiece"][1] + 1):
+        base = "https://runto666.com/product-category/onepiece/"
+        url = base if page == 1 else f"{base}page/{page}/"
+        try:
+            page_html = _get(url)
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404 and page > 1:
+                break
+            raise
+        titles = list(TITLE_RE.finditer(page_html))
+        if not titles:
+            if page == 1:
+                raise RuntimeError("runto666 onepiece: カテゴリ商品を抽出できません")
+            break
+        anchors = list(PRODUCT_LINK_RE.finditer(page_html))
+        for title_match in titles:
+            title = html_lib.unescape(title_match.group(1)).strip()
+            code_match = CODE_RE.search(title)
+            if not code_match:
+                continue
+            preceding = [a for a in anchors if a.start() < title_match.start()]
+            if not preceding:
+                raise RuntimeError(f"runto666 onepiece: 商品URLなし: {title}")
+            code = code_match.group(1).upper()
+            if code in links:
+                raise RuntimeError(f"runto666 onepiece: セットコード重複: {code}")
+            links[code] = (title, html_lib.unescape(preceding[-1].group(1)))
+    if not links:
+        raise RuntimeError("runto666 onepiece: セットコード付き商品が0件です")
+    products = [_parse_onepiece_variations(title, url, _get(url)) for title, url in links.values()]
+    return sorted(products, key=lambda product: product.code)
+
+
 def fetch(game: str) -> List[Tuple[str, int, int]]:
+    if game == "onepiece":
+        return [(p.title, p.box, p.carton) for p in fetch_onepiece_variations()]
     slug, max_pages, _ = GAME_CONFIG[game]
     products: List[Tuple[str, int, int]] = []
     for page in range(1, max_pages + 1):

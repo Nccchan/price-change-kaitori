@@ -294,6 +294,14 @@ def main(
     click.echo(f"  完了: {competitor_name} / {len(competitor_data.items)} 商品を抽出")
     click.echo()
 
+    # §1.6 Stage 1: OPEは個別variationのshadow照合中。Stage 2ガード完了まで本番書込禁止。
+    if fetch_web and comp == "homura" and game == "onepiece" and not dry_run:
+        click.echo(
+            "[ERROR] ワンピースRunto v2はshadow-onlyです。§1.6 Stage 2完了まで自動書込できません。",
+            err=True,
+        )
+        sys.exit(1)
+
     # ホムラ単独値を承認判定へ渡さない。先にラントゥと合流し、最終推奨値を確定する。
     # 取得・パース・照合が失敗した場合は安い値へフォールバックせずバッチを停止する。
     if fetch_web and comp == "homura" and game in ("pokemon", "onepiece", "dragonball"):
