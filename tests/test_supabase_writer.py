@@ -1,6 +1,7 @@
 import unittest
 
-from src.supabase_writer import _resolve_by_name, _resolve_product
+from src.models import UpdatePayload
+from src.supabase_writer import _resolve_by_name, _resolve_product, write_prices
 
 
 ROWS = [
@@ -27,6 +28,11 @@ class SupabaseResolverTests(unittest.TestCase):
         sku, method = _resolve_by_name("アビスアイ", "BOX", rows)
         self.assertIsNone(sku)
         self.assertEqual(method, "ambiguous-name")
+
+    def test_onepiece_production_write_requires_approved_proposal(self):
+        payload = UpdatePayload(2, "決戦の刻", "OP-16", 13200, None)
+        with self.assertRaisesRegex(RuntimeError, "proposal・approval"):
+            write_prices("onepiece", [payload], dry_run=False)
 
 
 if __name__ == "__main__":

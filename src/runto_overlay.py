@@ -6,6 +6,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import html as html_lib
+import hashlib
 import json
 import re
 import urllib.error
@@ -16,6 +17,7 @@ from src.models import CardItem, CompetitorData
 
 
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+PARSER_VERSION = "runto-onepiece-variation-v2.1"
 TITLE_RE = re.compile(r'<h2[^>]*woocommerce-loop-product__title[^>]*>([^<]+)</h2>')
 AMOUNT_RE = re.compile(r'<bdi[^>]*>(?:<span[^>]*>[^<]*</span>)?([0-9,]+)</bdi>')
 PRODUCT_LINK_RE = re.compile(
@@ -55,6 +57,8 @@ class RuntoVariationProduct:
     carton: int
     box_variation_id: int
     carton_variation_id: int
+    variation_json_sha256: str = ""
+    parser_version: str = PARSER_VERSION
 
 
 @dataclass(frozen=True)
@@ -71,6 +75,8 @@ class RuntoPriceEvidence:
     product_url: Optional[str]
     variation_id: Optional[int]
     fetched_at: str
+    variation_json_sha256: Optional[str]
+    parser_version: str
 
 
 def _get(url: str) -> str:
@@ -103,6 +109,9 @@ def _parse_onepiece_variations(title: str, url: str, page_html: str) -> RuntoVar
         variations = json.loads(html_lib.unescape(data_match.group(1)))
     except (ValueError, TypeError) as exc:
         raise ValueError(f"variation JSON解析失敗: {code}") from exc
+    variation_json_sha256 = hashlib.sha256(
+        json.dumps(variations, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
     labels = _variation_labels(page_html)
     accepted: Dict[str, List[Tuple[int, int]]] = {"BOX": [], "CARTON": []}
     for variation in variations:
@@ -128,7 +137,10 @@ def _parse_onepiece_variations(title: str, url: str, page_html: str) -> RuntoVar
             raise ValueError(f"{code} {unit}: 有効variationが{len(values)}件（1件必須）")
     box_id, box = accepted["BOX"][0]
     carton_id, carton = accepted["CARTON"][0]
-    return RuntoVariationProduct(code, title, url, box, carton, box_id, carton_id)
+    return RuntoVariationProduct(
+        code, title, url, box, carton, box_id, carton_id,
+        variation_json_sha256=variation_json_sha256,
+    )
 
 
 def fetch_onepiece_variations() -> List[RuntoVariationProduct]:
@@ -242,7 +254,7 @@ def apply_runto_max(
     evidence_sink: Optional[List[RuntoPriceEvidence]] = None,
 ) -> Tuple[List[RuntoSelection], int]:
     """競合生値を上書きし、推奨値が両社の最終値の最大になるようにする。"""
-    variation_meta: Dict[Tuple[str, int], Tuple[str, int]] = {}
+    variation_meta: Dict[Tuple[str, int], Tuple[str, int, str, str]] = {}
     require_complete_coverage = game == "onepiece" and products is None
     fetched_at = datetime.now(timezone.utc).isoformat()
     if require_complete_coverage:
@@ -250,8 +262,14 @@ def apply_runto_max(
         products = [(p.title, p.box, p.carton) for p in variation_products]
         for product in variation_products:
             normalized_code = _code(product.code)
-            variation_meta[(normalized_code, 1)] = (product.url, product.box_variation_id)
-            variation_meta[(normalized_code, 2)] = (product.url, product.carton_variation_id)
+            variation_meta[(normalized_code, 1)] = (
+                product.url, product.box_variation_id,
+                product.variation_json_sha256, product.parser_version,
+            )
+            variation_meta[(normalized_code, 2)] = (
+                product.url, product.carton_variation_id,
+                product.variation_json_sha256, product.parser_version,
+            )
     elif products is None:
         products = fetch(game)
     _, _, mode = GAME_CONFIG[game]
@@ -310,7 +328,9 @@ def apply_runto_max(
             runto_final = raw + runto_margin
             final = max(homura_final or 0, runto_final)
             item_code = _code(item.code) or _code(item.name)
-            product_url, variation_id = variation_meta.get((item_code, index), (None, None))
+            product_url, variation_id, content_hash, parser_version = variation_meta.get(
+                (item_code, index), (None, None, None, PARSER_VERSION)
+            )
             if evidence_sink is not None:
                 if homura_final is None:
                     selected_source = "runto"
@@ -333,6 +353,8 @@ def apply_runto_max(
                     product_url=product_url,
                     variation_id=variation_id,
                     fetched_at=fetched_at,
+                    variation_json_sha256=content_hash,
+                    parser_version=parser_version,
                 ))
             if final == runto_final and (homura_final is None or runto_final > homura_final):
                 setattr(item, f"price_{index}", final - output_margin)

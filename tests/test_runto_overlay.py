@@ -68,6 +68,8 @@ class RuntoOverlayTests(unittest.TestCase):
         product = _parse_onepiece_variations("決戦の刻【OP-16】", "https://example.test/op16", page)
         self.assertEqual((product.box, product.carton), (13000, 180000))
         self.assertEqual((product.box_variation_id, product.carton_variation_id), (2, 3))
+        self.assertEqual(len(product.variation_json_sha256), 64)
+        self.assertEqual(product.parser_version, "runto-onepiece-variation-v2.1")
 
     def test_duplicate_box_variation_fails_closed(self):
         variation_json = """[

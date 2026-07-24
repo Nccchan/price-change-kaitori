@@ -149,6 +149,18 @@ def _find_previous_json(current_path: str, game: str) -> Optional[str]:
     default=False,
     help="承認済みの5%超値上げを保留せず反映する",
 )
+@click.option(
+    "--proposal-output",
+    default=None,
+    metavar="FILE",
+    help="指定SKUだけの不変proposal JSONを生成する（dry-run専用）",
+)
+@click.option(
+    "--proposal-code",
+    multiple=True,
+    metavar="CODE",
+    help="proposalへ含める型式コード（複数指定可、現在はBOX単位）",
+)
 def main(
     image: tuple,
     from_json: Optional[str],
@@ -165,6 +177,8 @@ def main(
     only_name: Optional[str],
     approve_price_decreases: bool,
     approve_price_increases: bool,
+    proposal_output: Optional[str],
+    proposal_code: tuple,
 ):
     """トレーディングカード買取価格更新ツール"""
 
@@ -183,6 +197,12 @@ def main(
             "[ERROR] --image (-i) / --from-json / --fetch-web のいずれかを指定してください。",
             err=True,
         )
+        sys.exit(1)
+    if proposal_output and not dry_run:
+        click.echo("[ERROR] --proposal-output は --dry-run 専用です。", err=True)
+        sys.exit(1)
+    if bool(proposal_output) != bool(proposal_code):
+        click.echo("[ERROR] --proposal-output と --proposal-code は同時に指定してください。", err=True)
         sys.exit(1)
 
     sid = spreadsheet_id or SPREADSHEET_ID
@@ -366,6 +386,44 @@ def main(
     if increase_holds and not approve_price_increases:
         click.echo(f"  5%超値上げ要承認: {len(increase_holds)}件（自動反映から除外）")
     click.echo()
+
+    if proposal_output:
+        from dataclasses import asdict as _asdict
+        from src.pricing_proposal import create_proposal, save_json
+        requested = {code.strip().upper() for code in proposal_code}
+        evidence_by_code = {
+            row.code.strip().upper(): row for row in runto_evidence if row.unit == "BOX"
+        }
+        results_by_code = {
+            result.code.strip().upper(): result for result in results if result.code
+        }
+        missing = sorted(
+            (requested - set(evidence_by_code)) | (requested - set(results_by_code))
+        )
+        if missing:
+            click.echo(f"[ERROR] proposal対象を一意に解決できません: {missing}", err=True)
+            sys.exit(1)
+        proposal_items = []
+        for code in sorted(requested):
+            evidence = _asdict(evidence_by_code[code])
+            result = results_by_code[code]
+            evidence.update({
+                "current": result.current_price_1,
+                "proposed": result.recommended_price_1,
+            })
+            if evidence["final"] != evidence["proposed"]:
+                click.echo(f"[ERROR] {code}: 根拠finalと提案値が不一致です。", err=True)
+                sys.exit(1)
+            proposal_items.append(evidence)
+        proposal = create_proposal(
+            game=game, items=proposal_items,
+            purpose="initial-tape-cut-parser-correction",
+        )
+        save_json(proposal_output, proposal)
+        click.echo(
+            f"  proposal生成: {proposal['proposal_id']} / {len(proposal_items)}件 / "
+            f"hash={proposal['proposal_hash']}"
+        )
 
     # ------------------------------------------------------------------
     # Step 3.4: Supabase 解決層（P2-A / 2026-06-09 起案）

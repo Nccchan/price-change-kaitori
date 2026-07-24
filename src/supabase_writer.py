@@ -154,7 +154,10 @@ def _resolve_product(game, code, name, unit, active, product_rows):
 
 
 # ---- メイン書込 ----------------------------------------------------------------
-def write_prices(game, payloads, dry_run=False):
+def write_prices(
+    game, payloads, dry_run=False, *, proposal=None, approval=None,
+    expected_proposal_hash=None,
+):
     """payloads: main.py の UpdatePayload リスト（.code / .new_price_1(BOX) / .new_price_2 / .is_new）。
     price_2 列はゲーム別に NS(pokemon) または CARTON(その他)。
     """
@@ -166,6 +169,28 @@ def write_prices(game, payloads, dry_run=False):
     if game not in _PREFIX:
         print(f"[sb-dual-write] 未対応ゲーム: {game}")
         return
+
+    if game == "onepiece" and not dry_run:
+        if not proposal or not approval or not expected_proposal_hash:
+            raise RuntimeError("One Piece本番書込にはproposal・approval・expected hashが必須です")
+        from src.pricing_proposal import verify_approval
+        verify_approval(proposal, approval, expected_proposal_hash)
+        payload_values = set()
+        for payload in payloads:
+            code = (getattr(payload, "code", "") or "").strip().upper()
+            if getattr(payload, "new_price_1", None) is not None:
+                payload_values.add((code, "BOX", int(payload.new_price_1)))
+            if getattr(payload, "new_price_2", None) is not None:
+                payload_values.add((code, _PRICE2_UNIT[game], int(payload.new_price_2)))
+        proposal_values = {
+            (item["code"].strip().upper(), item["unit"], int(item["proposed"]))
+            for item in proposal.get("items", [])
+        }
+        if payload_values != proposal_values:
+            raise RuntimeError(
+                "apply payloadと承認済みproposalが一致しません "
+                f"(payload={len(payload_values)}, proposal={len(proposal_values)})"
+            )
 
     # products: sku→id（active）
     id_rows, product_rows, page, offset = {}, [], 1000, 0
