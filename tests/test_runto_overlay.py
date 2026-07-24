@@ -1,7 +1,12 @@
 import unittest
+from unittest.mock import patch
 
 from src.models import CardItem, CompetitorData, CompetitorType, GameType
-from src.runto_overlay import apply_runto_max, _parse_onepiece_variations
+from src.runto_overlay import (
+    RuntoVariationProduct,
+    apply_runto_max,
+    _parse_onepiece_variations,
+)
 
 
 class RuntoOverlayTests(unittest.TestCase):
@@ -74,6 +79,41 @@ class RuntoOverlayTests(unittest.TestCase):
           <option value="ari">シュリンク有</option><option value="case">カートン</option></select></form>'''
         with self.assertRaisesRegex(ValueError, "有効variationが2件"):
             _parse_onepiece_variations("決戦の刻【OP-16】", "x", page)
+
+    @patch("src.runto_overlay.fetch_onepiece_variations")
+    def test_onepiece_dynamic_coverage_and_evidence(self, fetch_mock):
+        fetch_mock.return_value = [RuntoVariationProduct(
+            "OP-16", "決戦の刻【OP-16】", "https://example.test/op16",
+            13000, 180000, 2, 3,
+        )]
+        item = CardItem(name="決戦の刻", code="OP-16", price_1=12000, price_2=175000)
+        evidence = []
+        selected, matched = apply_runto_max(
+            "onepiece", self.data(GameType.ONEPIECE, item), 200, 2000,
+            evidence_sink=evidence,
+        )
+        self.assertEqual(matched, 1)
+        self.assertEqual(len(selected), 2)
+        self.assertEqual(len(evidence), 2)
+        self.assertEqual(evidence[0].selected_source, "runto")
+        self.assertEqual(evidence[0].variation_id, 2)
+        self.assertEqual(evidence[0].product_url, "https://example.test/op16")
+
+    @patch("src.runto_overlay.fetch_onepiece_variations")
+    def test_onepiece_population_mismatch_fails_closed(self, fetch_mock):
+        fetch_mock.return_value = [RuntoVariationProduct(
+            "OP-16", "決戦の刻【OP-16】", "https://example.test/op16",
+            13000, 180000, 2, 3,
+        )]
+        items = [
+            CardItem(name="決戦の刻", code="OP-16", price_1=12000, price_2=175000),
+            CardItem(name="新商品", code="OP-17", price_1=10000, price_2=120000),
+        ]
+        data = CompetitorData(
+            game=GameType.ONEPIECE, competitor=CompetitorType.HOMURA, date="7/24", items=items,
+        )
+        with self.assertRaisesRegex(RuntimeError, "母集団不一致"):
+            apply_runto_max("onepiece", data, 200, 2000)
 
 
 if __name__ == "__main__":

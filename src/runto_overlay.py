@@ -4,6 +4,7 @@
 取得失敗を安いホムラ値として扱わないため、通信・パース異常は呼出元へ送出する。
 """
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import html as html_lib
 import json
 import re
@@ -54,6 +55,22 @@ class RuntoVariationProduct:
     carton: int
     box_variation_id: int
     carton_variation_id: int
+
+
+@dataclass(frozen=True)
+class RuntoPriceEvidence:
+    code: str
+    name: str
+    unit: str
+    homura_raw: Optional[int]
+    runto_raw: int
+    homura_final: Optional[int]
+    runto_final: int
+    final: int
+    selected_source: str
+    product_url: Optional[str]
+    variation_id: Optional[int]
+    fetched_at: str
 
 
 def _get(url: str) -> str:
@@ -222,17 +239,39 @@ def apply_runto_max(
     margin_second: int,
     products: Optional[List[Tuple[str, int, int]]] = None,
     runto_margin_second: Optional[int] = None,
+    evidence_sink: Optional[List[RuntoPriceEvidence]] = None,
 ) -> Tuple[List[RuntoSelection], int]:
     """競合生値を上書きし、推奨値が両社の最終値の最大になるようにする。"""
-    products = fetch(game) if products is None else products
+    variation_meta: Dict[Tuple[str, int], Tuple[str, int]] = {}
+    require_complete_coverage = game == "onepiece" and products is None
+    fetched_at = datetime.now(timezone.utc).isoformat()
+    if require_complete_coverage:
+        variation_products = fetch_onepiece_variations()
+        products = [(p.title, p.box, p.carton) for p in variation_products]
+        for product in variation_products:
+            normalized_code = _code(product.code)
+            variation_meta[(normalized_code, 1)] = (product.url, product.box_variation_id)
+            variation_meta[(normalized_code, 2)] = (product.url, product.carton_variation_id)
+    elif products is None:
+        products = fetch(game)
     _, _, mode = GAME_CONFIG[game]
     bids: Dict[Tuple[int, int], int] = {}
+    product_codes: set = set()
+    matched_codes: set = set()
+    unmatched_titles: List[str] = []
     matched = 0
     for title, low, high in products:
+        title_code = _code(title)
+        if title_code:
+            product_codes.add(title_code)
         item = _match(title, data.items)
         if item is None:
+            unmatched_titles.append(title)
             continue
         matched += 1
+        item_code = _code(item.code) or _code(item.name)
+        if item_code:
+            matched_codes.add(item_code)
         if mode == "pkm":
             raw_box = high if high == low or (high - low) / max(low, 1) <= 0.30 else low
             bids[(id(item), 1)] = max(bids.get((id(item), 1), 0), raw_box)
@@ -243,6 +282,18 @@ def apply_runto_max(
 
     if matched == 0:
         raise RuntimeError(f"runto666 {game}: ホムラ商品との照合が0件です")
+    if require_complete_coverage:
+        homura_codes = {_code(item.code) or _code(item.name) for item in data.items}
+        homura_codes.discard("")
+        missing_in_homura = sorted(product_codes - homura_codes)
+        missing_in_runto = sorted(homura_codes - product_codes)
+        if unmatched_titles or missing_in_homura or missing_in_runto or matched_codes != product_codes:
+            raise RuntimeError(
+                "runto666 onepiece: 母集団不一致 "
+                f"(Runto={len(product_codes)}, Homura={len(homura_codes)}, "
+                f"未照合={len(unmatched_titles)}, Homura欠落={missing_in_homura}, "
+                f"Runto欠落={missing_in_runto})"
+            )
 
     selections: List[RuntoSelection] = []
     for item in data.items:
@@ -258,6 +309,31 @@ def apply_runto_max(
             homura_final = current_raw + output_margin if current_raw is not None else None
             runto_final = raw + runto_margin
             final = max(homura_final or 0, runto_final)
+            item_code = _code(item.code) or _code(item.name)
+            product_url, variation_id = variation_meta.get((item_code, index), (None, None))
+            if evidence_sink is not None:
+                if homura_final is None:
+                    selected_source = "runto"
+                elif runto_final > homura_final:
+                    selected_source = "runto"
+                elif homura_final > runto_final:
+                    selected_source = "homura"
+                else:
+                    selected_source = "equal"
+                evidence_sink.append(RuntoPriceEvidence(
+                    code=item.code,
+                    name=item.name,
+                    unit=unit,
+                    homura_raw=current_raw,
+                    runto_raw=raw,
+                    homura_final=homura_final,
+                    runto_final=runto_final,
+                    final=final,
+                    selected_source=selected_source,
+                    product_url=product_url,
+                    variation_id=variation_id,
+                    fetched_at=fetched_at,
+                ))
             if final == runto_final and (homura_final is None or runto_final > homura_final):
                 setattr(item, f"price_{index}", final - output_margin)
                 selections.append(RuntoSelection(item.name, item.code, unit, homura_final, runto_final, final))

@@ -143,6 +143,12 @@ def _find_previous_json(current_path: str, game: str) -> Optional[str]:
     default=False,
     help="承認済みの大幅値下げを保留せず反映する",
 )
+@click.option(
+    "--approve-price-increases",
+    is_flag=True,
+    default=False,
+    help="承認済みの5%超値上げを保留せず反映する",
+)
 def main(
     image: tuple,
     from_json: Optional[str],
@@ -158,6 +164,7 @@ def main(
     spreadsheet_id: Optional[str],
     only_name: Optional[str],
     approve_price_decreases: bool,
+    approve_price_increases: bool,
 ):
     """トレーディングカード買取価格更新ツール"""
 
@@ -304,6 +311,7 @@ def main(
 
     # ホムラ単独値を承認判定へ渡さない。先にラントゥと合流し、最終推奨値を確定する。
     # 取得・パース・照合が失敗した場合は安い値へフォールバックせずバッチを停止する。
+    runto_evidence = []
     if fetch_web and comp == "homura" and game in ("pokemon", "onepiece", "dragonball"):
         click.echo("【Step 1.5】ラントゥ666と突合し max(ホムラ, ラントゥ) を確定中...")
         try:
@@ -313,6 +321,7 @@ def main(
             runto_selections, runto_matched = apply_runto_max(
                 game, competitor_data, effective_margin_box, effective_margin_carton,
                 runto_margin_second=(2000 if game in ("onepiece", "dragonball") else effective_margin_carton),
+                evidence_sink=runto_evidence,
             )
         except Exception as e:
             click.echo(f"\n[ERROR] ラントゥ突合に失敗したため安全停止しました: {e}", err=True)
@@ -350,9 +359,12 @@ def main(
     attention_items = comparator.get_attention_items(results)
     large_changes = comparator.get_large_changes(results)
     decrease_holds = comparator.get_decrease_holds(game, results)
+    increase_holds = comparator.get_increase_holds(game, results)
     click.echo(f"  完了: 要対応 {len(attention_items)} 商品 / 大幅変動 {len(large_changes)} 商品")
     if decrease_holds and not approve_price_decreases:
         click.echo(f"  大幅値下げ要承認: {len(decrease_holds)}件（自動反映から除外）")
+    if increase_holds and not approve_price_increases:
+        click.echo(f"  5%超値上げ要承認: {len(increase_holds)}件（自動反映から除外）")
     click.echo()
 
     # ------------------------------------------------------------------
@@ -446,6 +458,9 @@ def main(
     if decrease_holds and not approve_price_decreases:
         from src.price_decrease_guard import format_holds
         parts.append("## 大幅値下げ・要承認\n\n" + format_holds(decrease_holds))
+    if increase_holds and not approve_price_increases:
+        from src.price_increase_guard import format_holds as format_increase_holds
+        parts.append("## 大幅値上げ・要承認\n\n" + format_increase_holds(increase_holds))
     if daily_report_section:
         parts.append(daily_report_section)
     full_report = "\n\n".join(parts)
@@ -454,6 +469,13 @@ def main(
         with open(output, "w", encoding="utf-8") as f:
             f.write(full_report)
         click.echo(f"  レポートを保存: {output}")
+        if runto_evidence:
+            import json as _json
+            from dataclasses import asdict as _asdict
+            evidence_path = os.path.splitext(output)[0] + ".runto-evidence.json"
+            with open(evidence_path, "w", encoding="utf-8") as f:
+                _json.dump([_asdict(row) for row in runto_evidence], f, ensure_ascii=False, indent=2)
+            click.echo(f"  価格根拠を保存: {evidence_path}")
     else:
         click.echo()
         click.echo("─" * 60)
@@ -474,7 +496,8 @@ def main(
                     game=game, comparison_results=results,
                     current_items=current_items,
                     next_available_row=len(current_items) + 2,
-                    approve_large_decreases=approve_price_decreases)
+                    approve_large_decreases=approve_price_decreases,
+                    approve_large_increases=approve_price_increases)
                 supabase_writer.write_prices(game, _payloads, dry_run=True)
             except Exception as e:
                 click.echo(f"  ⚠️ SB dual-write(dry-run)失敗: {e}")
@@ -502,6 +525,7 @@ def main(
             current_items=current_items,
             next_available_row=next_row,
             approve_large_decreases=approve_price_decreases,
+            approve_large_increases=approve_price_increases,
         )
         if decrease_holds and not approve_price_decreases:
             try:

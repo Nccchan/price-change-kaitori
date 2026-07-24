@@ -171,6 +171,7 @@ class PriceComparator:
         current_items: List[CardItem],
         next_available_row: int,
         approve_large_decreases: bool = False,
+        approve_large_increases: bool = False,
     ) -> List[UpdatePayload]:
         """
         スプレッドシート更新用のペイロードリストを生成する。
@@ -208,6 +209,13 @@ class PriceComparator:
                         new_price_1 = None
                     else:
                         new_price_2 = None
+            if not approve_large_increases:
+                from src.price_increase_guard import evaluate_result as evaluate_increases
+                for hold in evaluate_increases(game, result):
+                    if hold.unit == "BOX":
+                        new_price_1 = None
+                    else:
+                        new_price_2 = None
 
             payloads.append(
                 UpdatePayload(
@@ -236,6 +244,10 @@ class PriceComparator:
 
     def get_decrease_holds(self, game: str, results: List[ComparisonResult]):
         from src.price_decrease_guard import evaluate_result
+        return [hold for result in results for hold in evaluate_result(game, result)]
+
+    def get_increase_holds(self, game: str, results: List[ComparisonResult]):
+        from src.price_increase_guard import evaluate_result
         return [hold for result in results for hold in evaluate_result(game, result)]
 
     def get_attention_items(
