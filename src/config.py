@@ -237,8 +237,8 @@ DRAGONBALL_MASTER = {
 DRAGONBALL_NAME_TO_CODE = {v: k for k, v in DRAGONBALL_MASTER.items()}
 
 # ゲーム別マスターデータ取得
-def get_master_data(game: str) -> dict:
-    """ゲーム種別に応じたマスターデータを返す（型式 → 商品名）"""
+def _config_master(game: str) -> dict:
+    """ハードコード辞書（フォールバック用・従来の挙動）。"""
     if game == "pokemon":
         return POKEMON_CODE_TO_NAME
     elif game == "onepiece":
@@ -246,3 +246,23 @@ def get_master_data(game: str) -> dict:
     elif game == "dragonball":
         return DRAGONBALL_MASTER
     return {}
+
+
+def get_master_data(game: str) -> dict:
+    """ゲーム種別のマスターデータ（型式 → 商品名）を返す。
+
+    MASTER_FROM_LEDGER=1 のときは Supabase の external_price_sources 台帳から構築し、
+    新弾が登録フォームから自動で載る（属人化ゼロ）。台帳読みに失敗/空/無効なら、
+    従来のハードコード辞書にフォールバックするので cron は絶対に止まらない。
+    """
+    try:
+        try:
+            from src.ledger_master import load_master
+        except ImportError:  # sys.path が src の場合
+            from ledger_master import load_master
+        led = load_master(game)
+        if led:
+            return led
+    except Exception:
+        pass
+    return _config_master(game)
