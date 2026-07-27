@@ -34,9 +34,31 @@ def is_enabled() -> bool:
     return os.getenv("MASTER_FROM_LEDGER", "0").strip() in {"1", "true", "yes", "on"}
 
 
+# cron の環境には SUPABASE_* が無いことがあるため、supabase_writer と同じく
+# org 側の .env.local からも認証を読む（env var があればそちら優先）。
+_ORG_ROOT = "/Users/nastuki_sever/aigive/org"
+
+
+def _load_env_file(path: str) -> dict:
+    import re
+    out = {}
+    try:
+        with open(path, encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                m = re.match(r'\s*([A-Z_]+)\s*=\s*"?([^"\n]+)"?', line)
+                if m:
+                    out[m.group(1)] = m.group(2).strip()
+    except FileNotFoundError:
+        pass
+    return out
+
+
 def _conf():
-    url = os.getenv("SUPABASE_URL", "").rstrip("/")
-    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    env = _load_env_file(f"{_ORG_ROOT}/apps/pricing/.env.local")
+    url = (os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+           or env.get("NEXT_PUBLIC_SUPABASE_URL") or "").rstrip("/")
+    key = (os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+           or env.get("SUPABASE_SERVICE_ROLE_KEY") or env.get("SUPABASE_SERVICE") or "")
     return url, key
 
 
