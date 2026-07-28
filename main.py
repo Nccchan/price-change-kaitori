@@ -321,18 +321,15 @@ def main(
     click.echo(f"  完了: {competitor_name} / {len(competitor_data.items)} 商品を抽出")
     click.echo()
 
-    # §1.6 Stage 1: OPEは個別variationのshadow照合中。Stage 2ガード完了まで本番書込禁止。
-    if fetch_web and comp == "homura" and game == "onepiece" and not dry_run:
-        click.echo(
-            "[ERROR] ワンピースRunto v2はshadow-onlyです。§1.6 Stage 2完了まで自動書込できません。",
-            err=True,
-        )
-        sys.exit(1)
+    # §1.6解除 (2026-07-28): ワンピはラントゥ幻価格(カート不可)を外しホムラ一本化(T-059)。
+    # shadowガード撤去＋runto突合からワンピ除外。これで凍結が解け、日次でホムラ実勢に追随する。
+    # 背景=凍結(dry-run+runto安全停止)で買取がstale-highのまま高値づかみ→流血。恒久是正。
 
     # ホムラ単独値を承認判定へ渡さない。先にラントゥと合流し、最終推奨値を確定する。
     # 取得・パース・照合が失敗した場合は安い値へフォールバックせずバッチを停止する。
+    # ワンピは除外(ラントゥ幻価格でstale化した反省・T-059)。ポケモン/DBのみラントゥmaxを適用。
     runto_evidence = []
-    if fetch_web and comp == "homura" and game in ("pokemon", "onepiece", "dragonball"):
+    if fetch_web and comp == "homura" and game in ("pokemon", "dragonball"):
         click.echo("【Step 1.5】ラントゥ666と突合し max(ホムラ, ラントゥ) を確定中...")
         try:
             from src.runto_overlay import apply_runto_max
