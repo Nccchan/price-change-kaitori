@@ -217,8 +217,10 @@ def write_prices(
     now = datetime.now(timezone.utc).isoformat()
 
     for p in payloads:
-        if getattr(p, "is_new", False):
-            continue  # 新規行はSupabaseに未登録の可能性 → 直結書込の対象外
+        # 新弾(is_new)でも products に登録済みなら書き込む（F-054 修正 2026-08-03）。
+        # 旧実装は is_new を一律 continue していたため、新弾の買取が Supabase に入らず
+        # /pricing/kohyo に永遠に出なかった（Homura取得→シートには書くが公開ビューに未反映）。
+        # 未登録の弾は _resolve_product が code/name で解決できず unresolved に回るので誤書込は起きない。
         code = getattr(p, "code", "") or ""
         # BOX (price_1)
         if getattr(p, "new_price_1", None) is not None:
