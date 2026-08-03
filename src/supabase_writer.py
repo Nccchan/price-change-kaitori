@@ -204,14 +204,10 @@ def write_prices(
         offset += page
     active = set(id_rows.keys())
 
-    # 準備中(0以下)ガード（2026-07-26 なつき指示）: 現在の公開買取が0以下(準備中)のunitは
-    # 価格を取得しても上書きしない（NS等の準備中を恒久維持する）。
-    prep = set()
-    for r in _rest("v_public_kaitori?select=product_id,unit,price"):
-        pv = r.get("price")
-        if pv is not None and float(pv) <= 0:
-            prep.add((r["product_id"], r["unit"]))
-
+    # 旧「準備中(0以下)ガード」は撤廃（2026-08-04）。買取「準備中」の公開停止は Web 側の
+    # products.kaitori_prep フラグ＋ v_public_kaitori の除外で行う（"価格取得"と"公開可否"を分離）。
+    # 取得側は常に最新買取を書き、公開の可否はフラグ側に委ねる（準備中でも内部に価格は入り続ける）。
+    # ※適用順序: 先に Web の migration(kaitori_prep列＋view) を本番適用してから本撤廃を入れること。
     p2_unit = _PRICE2_UNIT[game]
     rows, unresolved, prep_skipped = [], [], 0
     now = datetime.now(timezone.utc).isoformat()
@@ -226,24 +222,18 @@ def write_prices(
         if getattr(p, "new_price_1", None) is not None:
             sku, method = _resolve_product(game, code, getattr(p, "name", ""), "BOX", active, product_rows)
             if sku:
-                if (id_rows[sku], "BOX") in prep:
-                    prep_skipped += 1  # 準備中(0)は上書きしない
-                else:
-                    rows.append({"product_id": id_rows[sku], "kind": "kaitori", "unit": "BOX",
-                                 "currency": "JPY", "value": int(p.new_price_1),
-                                 "source": "price-change-kaitori", "valid_from": now})
+                rows.append({"product_id": id_rows[sku], "kind": "kaitori", "unit": "BOX",
+                             "currency": "JPY", "value": int(p.new_price_1),
+                             "source": "price-change-kaitori", "valid_from": now})
             else:
                 unresolved.append(f"{code or getattr(p, 'name', '')}/BOX:{method}")
         # price_2 (NS or CARTON)
         if getattr(p, "new_price_2", None) is not None:
             sku, method = _resolve_product(game, code, getattr(p, "name", ""), p2_unit, active, product_rows)
             if sku:
-                if (id_rows[sku], p2_unit) in prep:
-                    prep_skipped += 1  # 準備中(0)は上書きしない
-                else:
-                    rows.append({"product_id": id_rows[sku], "kind": "kaitori", "unit": p2_unit,
-                                 "currency": "JPY", "value": int(p.new_price_2),
-                                 "source": "price-change-kaitori", "valid_from": now})
+                rows.append({"product_id": id_rows[sku], "kind": "kaitori", "unit": p2_unit,
+                             "currency": "JPY", "value": int(p.new_price_2),
+                             "source": "price-change-kaitori", "valid_from": now})
             else:
                 unresolved.append(f"{code or getattr(p, 'name', '')}/{p2_unit}:{method}")
 
