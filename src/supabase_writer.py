@@ -16,7 +16,7 @@ import json
 import urllib.request
 import urllib.parse
 import unicodedata
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta, time as dt_time
 
 # ---- 認証読込（org 側 .env.local / .env から。環境変数優先）---------------------
 _ORG_ROOT = "/Users/nastuki_sever/aigive/org"
@@ -71,6 +71,47 @@ def _rest(path, method="GET", body=None):
     with urllib.request.urlopen(req, timeout=30) as r:
         raw = r.read()
         return json.loads(raw) if raw else []
+
+
+MANUAL_SOURCE = "natsuki-decision"
+
+
+def _hold_same_day_manual(rows):
+    """JSTの同日中になつき決裁値がある (product_id, unit) は、再計算の書込を見送る。
+
+    「後から書いた方が勝つ」設計自体は維持する（翌日のホムラ取得では通常ルールに戻る）。
+    ここで防ぐのは、POPや投稿に出した価格が"同じ日のうちに"黙って書き換わることだけ。
+    戻り値: (書き込むrows, 維持した内訳)
+    """
+    if not rows:
+        return rows, []
+    jst_today = datetime.now(timezone(timedelta(hours=9))).date()
+    since = datetime.combine(jst_today, dt_time(0, 0),
+                             tzinfo=timezone(timedelta(hours=9))).astimezone(timezone.utc).isoformat()
+    ids = sorted({r["product_id"] for r in rows})
+    manual = {}
+    try:
+        for i in range(0, len(ids), 50):
+            chunk = ",".join(ids[i:i + 50])
+            got = _rest(f"price_history?kind=eq.kaitori&source=eq.{MANUAL_SOURCE}"
+                        f"&product_id=in.({chunk})&valid_from=gte.{urllib.parse.quote(since)}"
+                        f"&select=product_id,unit,value,valid_from&order=valid_from.desc")
+            for row in got:
+                manual.setdefault((row["product_id"], row["unit"]), int(row["value"]))
+    except Exception as e:
+        # 照会に失敗したら握りつぶさず、従来どおり書く（＝安全側は"止めない"）。
+        print(f"[manual-hold] 決裁値の照会に失敗したため通常書込を継続: {e}")
+        return rows, []
+
+    keep, held = [], []
+    for r in rows:
+        k = (r["product_id"], r["unit"])
+        if k in manual and manual[k] != int(r["value"]):
+            held.append({"product_id": r["product_id"], "unit": r["unit"],
+                         "manual": manual[k], "calc": int(r["value"])})
+        else:
+            keep.append(r)
+    return keep, held
 
 
 def _quality_log(run_id, target, rule_id, verdict, expected=None, observed=None,
@@ -311,6 +352,20 @@ def write_prices(
                              "source": "price-change-kaitori", "valid_from": now})
             else:
                 unresolved.append(f"{code or getattr(p, 'name', '')}/{p2_unit}:{method}")
+
+    # 当日のなつき決裁値を、同じ日の再計算で消さない（2026-08-04 F-059）。
+    # なつきの方針: 手動決裁は"その日限り"。翌日のホムラ取得では通常ルール(+マージン)に戻ってよい。
+    # 困るのは「同じ日のうちに、POPや投稿に出した価格が黙って書き換わる」こと。
+    # よって JST の同日中に source='natsuki-decision' がある (product_id, unit) だけ書込をスキップする。
+    rows, held = _hold_same_day_manual(rows)
+    if held:
+        print(f"[manual-hold] 本日のなつき決裁値を維持（再計算をスキップ）: {len(held)}件")
+        for h in held[:10]:
+            print(f"  {h['unit']} 決裁¥{h['manual']:,} を維持（計算値¥{h['calc']:,} は不採用）")
+        _quality_log(f"kaitori-{game}-{now}", f"kaitori:{game}", "PRICE-012", "WARN",
+                     expected={"manual": [h["manual"] for h in held[:20]]},
+                     observed={"calculated": [h["calc"] for h in held[:20]]},
+                     note=f"当日のなつき決裁値を維持し再計算を見送り {len(held)}件（翌日は通常ルールに戻る）")
 
     if dry_run:
         print(f"[sb-dual-write DRY-RUN] {game}: insert予定 {len(rows)} 行 / 未解決 {len(unresolved)}件 / 準備中skip {prep_skipped}件")
