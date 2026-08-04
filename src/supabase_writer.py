@@ -73,6 +73,81 @@ def _rest(path, method="GET", body=None):
         return json.loads(raw) if raw else []
 
 
+def _quality_log(run_id, target, rule_id, verdict, expected=None, observed=None,
+                 evidence=None, note=None):
+    """検査結果を quality_runs（追記専用）に残す。ここの失敗は本処理を止めない。"""
+    try:
+        _rest("quality_runs", method="POST", body=[{
+            "run_id": run_id, "target": target, "rule_id": rule_id, "verdict": verdict,
+            "severity": {"PASS": "info", "WARN": "minor",
+                         "FAIL": "major", "BLOCK": "critical"}.get(verdict),
+            "expected": expected, "observed": observed, "evidence": evidence,
+            "rules_version": os.getenv("RULE_VERSION"), "note": note,
+        }])
+    except Exception as e:
+        print(f"[quality] quality_runs 記録失敗（本処理は継続）: {e}")
+
+
+def read_back(game, rows, run_id):
+    """PRICE-010: 書いたつもりの値と、price_history から読み直した実値を突合する。
+
+    F-057の教訓 =「APIが成功した」を完了の根拠にしない。反映先の実データで確認する。
+    rows は write_prices が INSERT した dict のリスト（product_id / unit / value）。
+    戻り値: (verdict, mismatches)
+    """
+    target = f"kaitori:{game}"
+    if not rows:
+        _quality_log(run_id, target, "PRICE-010", "PASS", note="書込対象なし")
+        return "PASS", []
+
+    expected = {}  # (product_id, unit) -> 意図した値
+    for r in rows:
+        expected[(r["product_id"], r["unit"])] = int(r["value"])
+
+    # 実データを読み直す（対象product_idだけを、分割して取得）
+    ids = sorted({pid for pid, _ in expected})
+    latest = {}
+    for i in range(0, len(ids), 50):
+        chunk = ",".join(ids[i:i + 50])
+        got = _rest(f"price_history?kind=eq.kaitori&product_id=in.({chunk})"
+                    f"&select=id,product_id,unit,value,valid_from"
+                    f"&order=valid_from.desc&limit=5000")
+        for row in got:
+            k = (row["product_id"], row["unit"])
+            if k not in latest:  # order=desc なので最初に来たものが最新
+                latest[k] = row
+
+    mismatches = []
+    for k, want in expected.items():
+        got = latest.get(k)
+        if got is None:
+            mismatches.append({"product_id": k[0], "unit": k[1], "expected": want,
+                               "observed": None, "why": "反映が見つからない"})
+        elif int(got["value"]) != want:
+            mismatches.append({"product_id": k[0], "unit": k[1], "expected": want,
+                               "observed": int(got["value"]), "why": "値が一致しない"})
+
+    verdict = "PASS" if not mismatches else "FAIL"
+    _quality_log(run_id, target, "PRICE-010", verdict,
+                 expected={"count": len(expected)},
+                 observed={"matched": len(expected) - len(mismatches),
+                           "mismatched": len(mismatches)},
+                 evidence={"sample_price_history_ids":
+                           [v["id"] for v in list(latest.values())[:5]]},
+                 note=None if not mismatches else json.dumps(mismatches[:20], ensure_ascii=False))
+
+    if mismatches:
+        print(f"[quality] ❌ PRICE-010 FAIL ({game}): {len(mismatches)}件が一致しません")
+        for m in mismatches[:10]:
+            print(f"  {m['unit']} expected={m['expected']} observed={m['observed']} ({m['why']})")
+        _notify(f"❌ 買取Read-back失敗 ({game}): {len(mismatches)}件が意図した値になっていません\n"
+                f"書込{len(expected)}件中 一致{len(expected) - len(mismatches)}件。"
+                f"詳細は quality_runs run_id={run_id}")
+    else:
+        print(f"[quality] ✅ PRICE-010 PASS ({game}): {len(expected)}件すべて意図どおり反映")
+    return verdict, mismatches
+
+
 def _active_skus():
     """products の active SKU 全件を set で返す（1000行上限を避けてページング）。"""
     out, page, offset = set(), 1000, 0
@@ -245,6 +320,16 @@ def write_prices(
 
     for i in range(0, len(rows), 200):  # fail-soft: チャンク投入
         _rest("price_history", method="POST", body=rows[i:i + 200])
+
+    # Quality Phase 1 / PRICE-010: 書いた直後に読み直して、意図した値になっているか確認する。
+    # 「INSERTが200を返した」では完了と見なさない（F-057）。
+    run_id = f"kaitori-{game}-{now}"
+    try:
+        read_back(game, rows, run_id)
+    except Exception as e:
+        print(f"[quality] Read-back実行失敗（書込自体は完了済）: {e}")
+        _quality_log(run_id, f"kaitori:{game}", "PRICE-010", "WARN",
+                     note=f"Read-back実行不可: {e}")
 
     if unresolved:
         _notify("⚠️ [SB dual-write] price_history 未解決SKU "
