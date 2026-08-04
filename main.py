@@ -328,8 +328,20 @@ def main(
     # ホムラ単独値を承認判定へ渡さない。先にラントゥと合流し、最終推奨値を確定する。
     # 取得・パース・照合が失敗した場合は安い値へフォールバックせずバッチを停止する。
     # ワンピは除外(ラントゥ幻価格でstale化した反省・T-059)。ポケモン/DBのみラントゥmaxを適用。
+    # 2026-08-04 F-058: ラントゥを全ゲームで一次ソースから外した（＝ホムラ一本化）。
+    # 理由: runto_overlay は「価格の数字」しか見ておらず、締切・カート可否・受付停止を
+    # 一切確認していない。相手が買っていなくても数字が高ければ max で採用されるため、
+    # 買っていない相手の価格で買取価格が作られる（幻価格）。
+    # ワンピは2026-07-28に同じ理由で除外済み(T-059)だったが、ポケモン/DBZへ水平展開して
+    # いなかった＝本件は「直したのに広げなかった」再発。なつき指示で全ゲーム除外。
+    # 再開の条件: 取得時に「実際に売れる状態か」を検証し、検証できないSKUは採用しないこと。
+    # 復活させる場合のみ KAITORI_RUNTO_ADOPT=1（暫定・検証実装までは使わない）。
     runto_evidence = []
-    if fetch_web and comp == "homura" and game in ("pokemon", "dragonball"):
+    _runto_adopt = os.getenv("KAITORI_RUNTO_ADOPT") == "1"
+    if fetch_web and comp == "homura" and game in ("pokemon", "dragonball") and not _runto_adopt:
+        click.echo("【Step 1.5】ラントゥ突合はスキップします（F-058: 締切/カート可否の検証が無いため一次ソースから除外・ホムラ一本化）")
+        click.echo()
+    elif fetch_web and comp == "homura" and game in ("pokemon", "dragonball"):
         click.echo("【Step 1.5】ラントゥ666と突合し max(ホムラ, ラントゥ) を確定中...")
         try:
             from src.runto_overlay import apply_runto_max
