@@ -589,8 +589,21 @@ def main(
                 _sb_notify._notify(format_holds(decrease_holds))
             except Exception as e:
                 click.echo(f"  ⚠️ 大幅値下げ一覧のTelegram通知失敗: {e}")
-        updated_cells = writer.write_prices(game, payloads)
-        click.echo(f"  完了: {updated_cells} セルを更新しました")
+        # ②シートは廃止済みで、買取の真実の源は Supabase price_history。GAS が落ちても
+        # Supabase 書込を巻き添えにしない（F-057: GASタイムアウト→例外→sys.exit(1) で
+        # 後段の dual-write が実行されず、ポケモン買取が2日間 Supabase 未更新のまま止まった）。
+        sheet_ok = True
+        try:
+            updated_cells = writer.write_prices(game, payloads)
+            click.echo(f"  完了: {updated_cells} セルを更新しました")
+        except Exception as e:
+            sheet_ok = False
+            click.echo(f"  ⚠️ シート書込失敗（②は廃止済のため中断せず Supabase へ進みます）: {e}", err=True)
+            try:
+                from src import supabase_writer as _sb_notify
+                _sb_notify._notify(f"⚠️ 買取cron: ②シート書込に失敗 ({game}): {e}\n→Supabase書込は続行します")
+            except Exception:
+                pass
 
         # Phase A: Supabase price_history への二重書込（フラグ時のみ）。
         # ここでの失敗はシート書込（成功済）を絶対に巻き込まない。
@@ -630,7 +643,12 @@ def main(
         sys.exit(1)
 
     click.echo()
-    click.echo("✅ 価格更新が完了しました！")
+    if sheet_ok:
+        click.echo("✅ 価格更新が完了しました！")
+    else:
+        # 黙って"完了"にしない（F-003 エラー握りつぶし / F-057）。
+        click.echo("⚠️ 価格更新は完了しましたが、②シート書込は失敗しています（Supabaseは反映済）")
+        sys.exit(3)
 
 
 if __name__ == "__main__":

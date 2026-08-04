@@ -48,16 +48,30 @@ class GasWriter:
         if not updates:
             return 0
 
-        resp = _req.post(
-            self.webhook_url,
-            json={"sheet": sheet_name, "updates": updates},
-            timeout=60,
-        )
-        resp.raise_for_status()
-        result = resp.json()
-        if not result.get("ok"):
-            raise RuntimeError(f"GAS error: {result}")
-        return result.get("count", len(updates))
+        # GASは一時的に timeout / 404 / 500 を返すことがある（F-057: 8/3・8/4に連続発生）。
+        # 3回まで指数バックオフで再試行し、単発の不調で書込を落とさない。
+        import time as _time
+
+        last = None
+        for attempt in range(3):
+            try:
+                resp = _req.post(
+                    self.webhook_url,
+                    json={"sheet": sheet_name, "updates": updates},
+                    timeout=90,
+                )
+                resp.raise_for_status()
+                result = resp.json()
+                if not result.get("ok"):
+                    raise RuntimeError(f"GAS error: {result}")
+                return result.get("count", len(updates))
+            except Exception as e:
+                last = e
+                if attempt < 2:
+                    wait = 5 * (2 ** attempt)  # 5s → 10s
+                    print(f"  ⚠️ GAS書込リトライ {attempt + 1}/2（{wait}秒後）: {e}")
+                    _time.sleep(wait)
+        raise last
 
     def write_date_cell(self, game: str, date_str: str) -> bool:
         """シートのA2セルに日付をSheetsAPI経由で書き込む"""
