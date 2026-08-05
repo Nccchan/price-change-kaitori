@@ -1,0 +1,31 @@
+{
+  "competitor": "homura",
+  "game": "dragonball",
+  "date": "2026/07/03",
+  "items": [
+    {
+      "name": "ドラゴンボールスーパーカードゲーム FW DUAL EVOLUTION",
+      "code": "FB-09",
+      "price_1": 13500,
+      "price_2": null
+    },
+    {
+      "name": "CROSS FORCE",
+      "code": "FB-10",
+      "price_1": 14500,
+      "price_2": null
+    },
+    {
+      "name": "フュージョンワールド MANGA BOOSTER 02",
+      "code": "SB-02",
+      "price_1": 15000,
+      "price_2": null
+    },
+    {
+      "name": "ドラゴンボールスーパーダイバーズ アドバンスパック",
+      "code": "",
+      "price_1": 20000,
+      "price_2": null
+    }
+  ]
+}

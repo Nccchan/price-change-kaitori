@@ -1,0 +1,139 @@
+{
+  "competitor": "homura",
+  "game": "onepiece",
+  "date": "2026/06/01",
+  "items": [
+    {
+      "name": "メモリアルコレクション",
+      "code": "EB-01",
+      "price_1": 16500,
+      "price_2": 192000
+    },
+    {
+      "name": "Anime 25th collection",
+      "code": "EB-02",
+      "price_1": 16500,
+      "price_2": 200000
+    },
+    {
+      "name": "Heroines Edition",
+      "code": "EB-03",
+      "price_1": 13500,
+      "price_2": 175000
+    },
+    {
+      "name": "EGGHEAD CRISIS",
+      "code": "EB-04",
+      "price_1": 8500,
+      "price_2": 110000
+    },
+    {
+      "name": "ロマンスドーン",
+      "code": "OP-01",
+      "price_1": 36500,
+      "price_2": 450000
+    },
+    {
+      "name": "頂上決戦",
+      "code": "OP-02",
+      "price_1": 20000,
+      "price_2": 250000
+    },
+    {
+      "name": "強大な敵",
+      "code": "OP-03",
+      "price_1": 17000,
+      "price_2": 210000
+    },
+    {
+      "name": "謀略の王国",
+      "code": "OP-04",
+      "price_1": 18500,
+      "price_2": 232000
+    },
+    {
+      "name": "新時代の主役",
+      "code": "OP-05",
+      "price_1": 42500,
+      "price_2": 540000
+    },
+    {
+      "name": "双璧の覇者",
+      "code": "OP-06",
+      "price_1": 18000,
+      "price_2": 220000
+    },
+    {
+      "name": "500年後の未来",
+      "code": "OP-07",
+      "price_1": 13000,
+      "price_2": 165000
+    },
+    {
+      "name": "二つの伝説",
+      "code": "OP-08",
+      "price_1": 10000,
+      "price_2": 125000
+    },
+    {
+      "name": "新たなる皇帝",
+      "code": "OP-09",
+      "price_1": 17200,
+      "price_2": 215000
+    },
+    {
+      "name": "王族の血統",
+      "code": "OP-10",
+      "price_1": 10000,
+      "price_2": 130000
+    },
+    {
+      "name": "神速の拳",
+      "code": "OP-11",
+      "price_1": 24000,
+      "price_2": 300000
+    },
+    {
+      "name": "師弟の絆",
+      "code": "OP-12",
+      "price_1": 12500,
+      "price_2": 155000
+    },
+    {
+      "name": "受け継がれる意志",
+      "code": "OP-13",
+      "price_1": 22000,
+      "price_2": 280000
+    },
+    {
+      "name": "蒼海の七傑",
+      "code": "OP-14",
+      "price_1": 10500,
+      "price_2": 130000
+    },
+    {
+      "name": "神の島の冒険",
+      "code": "OP-15",
+      "price_1": 11000,
+      "price_2": 142000
+    },
+    {
+      "name": "決戦の刻",
+      "code": "OP-16",
+      "price_1": 15700,
+      "price_2": 195000
+    },
+    {
+      "name": "ONE PIECE CARD THE BEST",
+      "code": "PRB-01",
+      "price_1": 17000,
+      "price_2": 175000
+    },
+    {
+      "name": "ONE PIECE CARD THE BEST vol.2",
+      "code": "PRB-02",
+      "price_1": 7300,
+      "price_2": 150000
+    }
+  ]
+}

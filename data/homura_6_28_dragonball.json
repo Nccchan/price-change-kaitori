@@ -1,0 +1,25 @@
+{
+  "competitor": "homura",
+  "game": "dragonball",
+  "date": "2026/06/28",
+  "items": [
+    {
+      "name": "CROSS FORCE",
+      "code": "FB-10",
+      "price_1": 13100,
+      "price_2": null
+    },
+    {
+      "name": "フュージョンワールド MANGA BOOSTER 02",
+      "code": "SB-02",
+      "price_1": 15000,
+      "price_2": null
+    },
+    {
+      "name": "ドラゴンボールスーパーダイバーズ アドバンスパック",
+      "code": "",
+      "price_1": 20000,
+      "price_2": null
+    }
+  ]
+}

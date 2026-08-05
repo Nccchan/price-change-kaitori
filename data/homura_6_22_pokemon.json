@@ -1,0 +1,517 @@
+{
+  "competitor": "homura",
+  "game": "pokemon",
+  "date": "2026/06/22",
+  "items": [
+    {
+      "name": "メガブレイブ",
+      "code": "M1L",
+      "price_1": 11500,
+      "price_2": 9300
+    },
+    {
+      "name": "メガシンフォニア",
+      "code": "M1S",
+      "price_1": 10300,
+      "price_2": 8300
+    },
+    {
+      "name": "インフェルノX",
+      "code": "M2",
+      "price_1": 22500,
+      "price_2": 14500
+    },
+    {
+      "name": "メガドリームex",
+      "code": "M2a",
+      "price_1": 14500,
+      "price_2": 11300
+    },
+    {
+      "name": "ムニキスゼロ",
+      "code": "M3-box",
+      "price_1": 8800,
+      "price_2": 7500
+    },
+    {
+      "name": "ニンジャスピナー",
+      "code": "M4",
+      "price_1": 11200,
+      "price_2": 9500
+    },
+    {
+      "name": "ダークファンタズマ",
+      "code": "S10a",
+      "price_1": 28000,
+      "price_2": null
+    },
+    {
+      "name": "ポケモンGO",
+      "code": "S10b",
+      "price_1": 30000,
+      "price_2": null
+    },
+    {
+      "name": "タイムゲイザー",
+      "code": "S10D",
+      "price_1": 13000,
+      "price_2": null
+    },
+    {
+      "name": "スペースジャグラー",
+      "code": "S10P",
+      "price_1": 13000,
+      "price_2": null
+    },
+    {
+      "name": "ロストアビス",
+      "code": "S11",
+      "price_1": 54000,
+      "price_2": 44000
+    },
+    {
+      "name": "白熱のアルカナ",
+      "code": "S11a",
+      "price_1": 10500,
+      "price_2": 9700
+    },
+    {
+      "name": "パラダイムトリガー",
+      "code": "S12",
+      "price_1": 20000,
+      "price_2": 18500
+    },
+    {
+      "name": "VSTARユニバース",
+      "code": "S12a",
+      "price_1": 28500,
+      "price_2": 26500
+    },
+    {
+      "name": "vmaxライジング",
+      "code": "S1a",
+      "price_1": 120000,
+      "price_2": null
+    },
+    {
+      "name": "シールドV",
+      "code": "S1H",
+      "price_1": 65000,
+      "price_2": null
+    },
+    {
+      "name": "ソードV",
+      "code": "S1W",
+      "price_1": 45000,
+      "price_2": null
+    },
+    {
+      "name": "反逆クラッシュ",
+      "code": "S2",
+      "price_1": 55000,
+      "price_2": null
+    },
+    {
+      "name": "爆炎ウォーカー",
+      "code": "S2a",
+      "price_1": 48000,
+      "price_2": null
+    },
+    {
+      "name": "ムゲンゾーン",
+      "code": "S3",
+      "price_1": 55000,
+      "price_2": null
+    },
+    {
+      "name": "伝説の鼓動",
+      "code": "S3a",
+      "price_1": 41000,
+      "price_2": null
+    },
+    {
+      "name": "仰天のボルテッカー",
+      "code": "S4",
+      "price_1": 40000,
+      "price_2": null
+    },
+    {
+      "name": "シャイニースターV",
+      "code": "S4a",
+      "price_1": 19000,
+      "price_2": null
+    },
+    {
+      "name": "双璧のファイター",
+      "code": "S5a",
+      "price_1": 40000,
+      "price_2": null
+    },
+    {
+      "name": "一撃マスター",
+      "code": "S5I",
+      "price_1": 40000,
+      "price_2": null
+    },
+    {
+      "name": "連撃マスター",
+      "code": "S5R",
+      "price_1": 50000,
+      "price_2": null
+    },
+    {
+      "name": "イーブイヒーローズ",
+      "code": "S6a",
+      "price_1": 120000,
+      "price_2": null
+    },
+    {
+      "name": "白銀のランス",
+      "code": "S6H",
+      "price_1": 20000,
+      "price_2": null
+    },
+    {
+      "name": "漆黒のガイスト",
+      "code": "S6K",
+      "price_1": 21000,
+      "price_2": null
+    },
+    {
+      "name": "摩天パーフェクト",
+      "code": "S7D",
+      "price_1": 20000,
+      "price_2": null
+    },
+    {
+      "name": "蒼空ストリーム",
+      "code": "S7R",
+      "price_1": 280000,
+      "price_2": null
+    },
+    {
+      "name": "フュージョンアーツ",
+      "code": "S8",
+      "price_1": 50000,
+      "price_2": null
+    },
+    {
+      "name": "25thアニバーサリー",
+      "code": "S8a",
+      "price_1": 60000,
+      "price_2": null
+    },
+    {
+      "name": "vmaxクライマックス",
+      "code": "S8b",
+      "price_1": 34000,
+      "price_2": null
+    },
+    {
+      "name": "スターバース",
+      "code": "S9",
+      "price_1": 21500,
+      "price_2": null
+    },
+    {
+      "name": "バトルリージョン",
+      "code": "S9a",
+      "price_1": 12000,
+      "price_2": null
+    },
+    {
+      "name": "ダブルブレイズ",
+      "code": "SM10",
+      "price_1": 125000,
+      "price_2": null
+    },
+    {
+      "name": "ジージーエンド",
+      "code": "SM10a",
+      "price_1": 110000,
+      "price_2": null
+    },
+    {
+      "name": "スカイレジェンド",
+      "code": "SM10b",
+      "price_1": 120000,
+      "price_2": null
+    },
+    {
+      "name": "ミラクルツイン",
+      "code": "SM11",
+      "price_1": 190000,
+      "price_2": null
+    },
+    {
+      "name": "リミックスバウト",
+      "code": "SM11a",
+      "price_1": 140000,
+      "price_2": null
+    },
+    {
+      "name": "ドリームリーグ",
+      "code": "SM11b",
+      "price_1": 151000,
+      "price_2": null
+    },
+    {
+      "name": "オルタージェネシス",
+      "code": "SM12",
+      "price_1": 60000,
+      "price_2": null
+    },
+    {
+      "name": "タッグオールスターズ",
+      "code": "SM12a",
+      "price_1": 170000,
+      "price_2": null
+    },
+    {
+      "name": "ウルトラフォース",
+      "code": "SM5+",
+      "price_1": 62000,
+      "price_2": null
+    },
+    {
+      "name": "ウルトラムーン",
+      "code": "SM5M",
+      "price_1": 170000,
+      "price_2": null
+    },
+    {
+      "name": "禁断の光",
+      "code": "SM6",
+      "price_1": 70000,
+      "price_2": null
+    },
+    {
+      "name": "ドラゴンストーム",
+      "code": "SM6a",
+      "price_1": 125000,
+      "price_2": null
+    },
+    {
+      "name": "チャンピオンロード",
+      "code": "SM6b",
+      "price_1": 100000,
+      "price_2": null
+    },
+    {
+      "name": "迅雷スパーク",
+      "code": "SM7a",
+      "price_1": 70000,
+      "price_2": null
+    },
+    {
+      "name": "フェアリーライズ",
+      "code": "SM7b",
+      "price_1": 55000,
+      "price_2": null
+    },
+    {
+      "name": "超爆インパクト",
+      "code": "SM8",
+      "price_1": 110000,
+      "price_2": null
+    },
+    {
+      "name": "ダークオーダー",
+      "code": "SM8a",
+      "price_1": 40000,
+      "price_2": null
+    },
+    {
+      "name": "GXウルトラシャイニー",
+      "code": "SM8b",
+      "price_1": 175000,
+      "price_2": null
+    },
+    {
+      "name": "タッグボルト",
+      "code": "SM9",
+      "price_1": 380000,
+      "price_2": null
+    },
+    {
+      "name": "ナイトユニゾン",
+      "code": "SM9a",
+      "price_1": 95000,
+      "price_2": null
+    },
+    {
+      "name": "フルメタルウォール",
+      "code": "SM9b",
+      "price_1": 60000,
+      "price_2": null
+    },
+    {
+      "name": "ロケット団の栄光",
+      "code": "SV10",
+      "price_1": 24000,
+      "price_2": 20000
+    },
+    {
+      "name": "ブラックボルト",
+      "code": "SV11B",
+      "price_1": 22500,
+      "price_2": 16500
+    },
+    {
+      "name": "ブラックボルトDX",
+      "code": "SV11B-dx",
+      "price_1": 23000,
+      "price_2": 16500
+    },
+    {
+      "name": "ホワイトフレア",
+      "code": "SV11W",
+      "price_1": 19500,
+      "price_2": 15500
+    },
+    {
+      "name": "ホワイトフレアDX",
+      "code": "SV11W-dx",
+      "price_1": 19500,
+      "price_2": 15500
+    },
+    {
+      "name": "トリプレットビート",
+      "code": "SV1a",
+      "price_1": 17800,
+      "price_2": 15500
+    },
+    {
+      "name": "スカーレットex",
+      "code": "SV1S",
+      "price_1": 13000,
+      "price_2": 9800
+    },
+    {
+      "name": "バイオレットex",
+      "code": "SV1V",
+      "price_1": 9800,
+      "price_2": 8800
+    },
+    {
+      "name": "ポケモンカード151",
+      "code": "SV2a",
+      "price_1": 58000,
+      "price_2": 45000
+    },
+    {
+      "name": "クレイバースト",
+      "code": "SV2D",
+      "price_1": 12000,
+      "price_2": 10500
+    },
+    {
+      "name": "スノーハザード",
+      "code": "SV2P",
+      "price_1": 11000,
+      "price_2": 9500
+    },
+    {
+      "name": "黒炎の支配者",
+      "code": "SV3",
+      "price_1": 18300,
+      "price_2": 16500
+    },
+    {
+      "name": "レイジングサーフ",
+      "code": "SV3a",
+      "price_1": 12500,
+      "price_2": 11200
+    },
+    {
+      "name": "シャイニートレジャーex",
+      "code": "SV4a",
+      "price_1": 17800,
+      "price_2": 14700
+    },
+    {
+      "name": "古代の咆哮",
+      "code": "SV4K",
+      "price_1": 10800,
+      "price_2": 9800
+    },
+    {
+      "name": "未来の一閃",
+      "code": "SV4M",
+      "price_1": 10500,
+      "price_2": 9300
+    },
+    {
+      "name": "クリムゾンヘイズ",
+      "code": "SV5a",
+      "price_1": 13000,
+      "price_2": 11500
+    },
+    {
+      "name": "ワイルドフォース",
+      "code": "SV5k",
+      "price_1": 13000,
+      "price_2": 11500
+    },
+    {
+      "name": "サイバージャッジ",
+      "code": "SV5M",
+      "price_1": 11000,
+      "price_2": 9700
+    },
+    {
+      "name": "変幻の仮面",
+      "code": "SV6",
+      "price_1": 13000,
+      "price_2": 9800
+    },
+    {
+      "name": "ナイトワンダラー",
+      "code": "SV6a",
+      "price_1": 11000,
+      "price_2": 9200
+    },
+    {
+      "name": "ステラミラクル",
+      "code": "SV7",
+      "price_1": 11000,
+      "price_2": 8500
+    },
+    {
+      "name": "楽園ドラゴーナ",
+      "code": "SV7a",
+      "price_1": 15000,
+      "price_2": 13700
+    },
+    {
+      "name": "超電ブレイカー",
+      "code": "SV8",
+      "price_1": 28000,
+      "price_2": 26000
+    },
+    {
+      "name": "テラスタルフェスex",
+      "code": "SV8a",
+      "price_1": 19000,
+      "price_2": 17500
+    },
+    {
+      "name": "バトルパートナーズ",
+      "code": "SV9",
+      "price_1": 10000,
+      "price_2": 9300
+    },
+    {
+      "name": "熱風のアリーナ",
+      "code": "SV9a",
+      "price_1": 19500,
+      "price_2": 17500
+    },
+    {
+      "name": "アビスアイ",
+      "code": "114521329462127",
+      "price_1": 11800,
+      "price_2": 10300
+    }
+  ]
+}

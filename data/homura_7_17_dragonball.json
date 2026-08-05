@@ -1,0 +1,85 @@
+{
+  "competitor": "homura",
+  "game": "dragonball",
+  "date": "2026/07/17",
+  "items": [
+    {
+      "name": "覚醒の鼓動",
+      "code": "FB-01",
+      "price_1": 6500,
+      "price_2": null
+    },
+    {
+      "name": "烈火の闘気",
+      "code": "FB-02",
+      "price_1": 6500,
+      "price_2": null
+    },
+    {
+      "name": "怒りの咆哮",
+      "code": "FB-03",
+      "price_1": 6500,
+      "price_2": null
+    },
+    {
+      "name": "限界を超えし者",
+      "code": "FB-04",
+      "price_1": 8200,
+      "price_2": null
+    },
+    {
+      "name": "未知なる冒険",
+      "code": "FB-05",
+      "price_1": 10000,
+      "price_2": null
+    },
+    {
+      "name": "迫り来る脅威",
+      "code": "FB-06",
+      "price_1": 14000,
+      "price_2": null
+    },
+    {
+      "name": "神龍への願い",
+      "code": "FB-07",
+      "price_1": 25000,
+      "price_2": null
+    },
+    {
+      "name": "誇り高き戦闘民族",
+      "code": "FB-08",
+      "price_1": 9600,
+      "price_2": null
+    },
+    {
+      "name": "ドラゴンボールスーパーカードゲーム FW DUAL EVOLUTION",
+      "code": "FB-09",
+      "price_1": 14200,
+      "price_2": null
+    },
+    {
+      "name": "CROSS FORCE",
+      "code": "FB-10",
+      "price_1": 13500,
+      "price_2": null
+    },
+    {
+      "name": "MANGA BOOSTER 01",
+      "code": "SB-01",
+      "price_1": 100000,
+      "price_2": null
+    },
+    {
+      "name": "フュージョンワールド MANGA BOOSTER 02",
+      "code": "SB-02",
+      "price_1": 60000,
+      "price_2": null
+    },
+    {
+      "name": "ドラゴンボールスーパーダイバーズ アドバンスパック",
+      "code": "",
+      "price_1": 55000,
+      "price_2": null
+    }
+  ]
+}

@@ -367,13 +367,25 @@ def main(
     # ------------------------------------------------------------------
     # Step 2: 現行価格を Google Sheets から読み込み
     # ------------------------------------------------------------------
-    click.echo("【Step 2】 現行価格をスプレッドシートから読み込み中...")
-    reader = GVizReader(spreadsheet_id=sid)
+    # 2026-08-05: 現行価格の読み元を『にこにこ買取(旧)』シートから Supabase へ切替（T-098）。
+    # なつき指示「②も旧シートも消していい」。切替前に3ゲームで突合し、DBZ完全一致・
+    # ポケモン差1件・ワンピ16件（いずれもシート側がstale-high=F-044の既知問題）を確認済み。
+    # 旧シートに戻す場合のみ KAITORI_READ_FROM_SHEET=1。
+    if os.getenv("KAITORI_READ_FROM_SHEET") == "1":
+        click.echo("【Step 2】 現行価格をスプレッドシートから読み込み中...(旧経路)")
+        reader = GVizReader(spreadsheet_id=sid)
+    else:
+        click.echo("【Step 2】 現行価格を Supabase から読み込み中...")
+        from src.supabase_reader import SupabaseReader
+        reader = SupabaseReader()
     try:
         current_items = reader.read_sheet(game)
     except Exception as e:
-        click.echo(f"\n[ERROR] スプレッドシートの読み込みに失敗しました: {e}", err=True)
-        click.echo("  --dry-run オプションを使用するか、credentials.json を設定してください。", err=True)
+        click.echo(f"\n[ERROR] 現行価格の読み込みに失敗しました: {e}", err=True)
+        sys.exit(1)
+    if not current_items:
+        # 0件のまま進むと「全部が新弾」に見えて全件書き換えになる。必ず止める
+        click.echo("\n[ERROR] 現行価格が0件でした。読み元がおかしいので安全のため停止します。", err=True)
         sys.exit(1)
 
     click.echo(f"  完了: {len(current_items)} 商品を読み込みました")
@@ -604,16 +616,23 @@ def main(
         # ②シートは廃止済みで、買取の真実の源は Supabase price_history。GAS が落ちても
         # Supabase 書込を巻き添えにしない（F-057: GASタイムアウト→例外→sys.exit(1) で
         # 後段の dual-write が実行されず、ポケモン買取が2日間 Supabase 未更新のまま止まった）。
+        # 2026-08-05: 『にこにこ買取(旧)』シートへの書込を既定で停止（T-098・なつき「消していい」）。
+        # 現行価格の読み元はSupabaseへ移したので、シートはもう誰も読まない＝書く意味が無い。
+        # これでGAS障害が価格更新を巻き込む経路（F-057）も構造的に消える。
+        # 戻す場合のみ KAITORI_WRITE_TO_SHEET=1。
         sheet_ok = True
-        try:
+        if os.getenv("KAITORI_WRITE_TO_SHEET") != "1":
+            click.echo("  シート書込はスキップ（2026-08-05 にこにこ買取(旧)シートを廃止）")
+        else:
+          try:
             updated_cells = writer.write_prices(game, payloads)
             click.echo(f"  完了: {updated_cells} セルを更新しました")
-        except Exception as e:
+          except Exception as e:
             sheet_ok = False
-            click.echo(f"  ⚠️ シート書込失敗（②は廃止済のため中断せず Supabase へ進みます）: {e}", err=True)
+            click.echo(f"  ⚠️ シート書込失敗（廃止済のため中断せず Supabase へ進みます）: {e}", err=True)
             try:
                 from src import supabase_writer as _sb_notify
-                _sb_notify._notify(f"⚠️ 買取cron: ②シート書込に失敗 ({game}): {e}\n→Supabase書込は続行します")
+                _sb_notify._notify(f"⚠️ 買取cron: シート書込に失敗 ({game}): {e}\n→Supabase書込は続行します")
             except Exception:
                 pass
 
