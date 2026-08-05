@@ -583,6 +583,14 @@ def main(
         return
 
     if not yes:
+        # 2026-08-05 F-060: cron（画面が無い環境）で確認プロンプトに来ると入力待ちのまま
+        # Aborted! になり、それが「価格を更新しなかった」として静かに流れていた。
+        # ワンピは --yes の付け忘れでこれに8日間当たり続けた。
+        # 対話できない環境では待たずに即エラーで落とす。付け忘れたら必ず気づく。
+        if not sys.stdin.isatty():
+            click.echo("\n[ERROR] 対話できない環境（cron等）で確認が必要な状態になりました。"
+                       "--yes を付けてください。価格は一切更新していません。", err=True)
+            sys.exit(4)
         click.echo(f"スプレッドシートを更新します。")
         click.echo(f"  対象: {len(results)} 商品（新規: {sum(1 for r in results if r.is_new)} 商品）")
         if not click.confirm("続行しますか？", default=True):
