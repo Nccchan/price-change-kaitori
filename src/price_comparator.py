@@ -3,7 +3,7 @@
 """
 from typing import List, Optional, Dict, Tuple
 
-from src.config import MARGINS, PRICE_LABELS
+from src.config import MARGINS, SKU_MARGIN_OVERRIDES, PRICE_LABELS
 from src.models import CardItem, CompetitorData, ComparisonResult, DailyChangeResult, UpdatePayload
 
 
@@ -146,6 +146,11 @@ class PriceComparator:
             current = _find_match(comp_item, current_items)
             is_new = current is None
 
+            # 弾ごとの特例（なつきが「強気に集めたい」と決めた弾）はゲーム共通より優先する。
+            ov = SKU_MARGIN_OVERRIDES.get((comp_item.code or "").upper())
+            row_margin_box = ov["box"] if ov else margin_box
+            row_margin_carton = ov["carton"] if ov else margin_carton
+
             results.append(
                 ComparisonResult(
                     name=comp_item.name,
@@ -154,8 +159,8 @@ class PriceComparator:
                     competitor_price_2=comp_item.price_2,
                     current_price_1=current.price_1 if current else None,
                     current_price_2=current.price_2 if current else None,
-                    required_margin_1=margin_box,
-                    required_margin_2=margin_carton,
+                    required_margin_1=row_margin_box,
+                    required_margin_2=row_margin_carton,
                     is_new=is_new,
                     locked_1=current.locked_1 if current else False,
                     locked_2=current.locked_2 if current else False,
