@@ -3,7 +3,11 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 
-INCREASE_RATE_LIMIT = 0.05
+# 2026-08-14 なつき決定: 値上げ方向は自動で通す（A案）＋上限を引き上げる。
+# 5%は競合追随の通常幅（今日の保留19件は最大14%）を毎日ブロックしてしまい、
+# 承認導線が無いため永久に解消しなかった＝安すぎる買取が公開され続けた（T-131）。
+# 20%は「競合データの取り違え・桁違い」だけを止めるための天井。粗利ガードは別途効く。
+INCREASE_RATE_LIMIT = 0.20
 
 
 @dataclass(frozen=True)
