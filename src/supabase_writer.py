@@ -246,15 +246,25 @@ def _normalize_name(value):
     return re.sub(r"[\s　()（）・]+", "", value)
 
 
-def _resolve_by_name(name, unit, product_rows):
-    """正規化名が一意な場合だけSKUを返す。0件/複数件は fail closed。"""
+def _resolve_by_name(name, unit, product_rows, game=None):
+    """正規化名が一意な場合だけSKUを返す。0件/複数件は fail closed。
+
+    ⚠️ game を必ず渡すこと。**ゲームをまたいだ名前一致を許すと事故る**（2026-08-17/18・F-122）:
+       ポケモンの取得結果に紛れ込んだ「決戦の刻」が名前一致で OPE-OP16-BOX に解決され、
+       ¥200 が2日連続で書き込まれた。買取だけでなく販売価格まで ¥300/¥400 に落ちて公開された。
+       ポケモンの run は PKM- のSKUしか書いてはいけない。
+       current が ¥0（新規扱い）だったため値下げガードもすり抜けている＝ガードを足すより
+       そもそも他ゲームのSKUに触らせないのが正しい。
+    """
     target = _normalize_name(name)
     if not target:
         return None, "missing-name"
     suffix = _UNIT_SUFFIX[unit]
+    prefix = f"{_PREFIX[game]}-" if game in _PREFIX else None
     matches = [
         row["sku"] for row in product_rows
         if row.get("sku", "").endswith(suffix)
+        and (prefix is None or row.get("sku", "").startswith(prefix))
         and _normalize_name(row.get("name_jp")) == target
     ]
     if len(matches) == 1:
@@ -266,7 +276,7 @@ def _resolve_product(game, code, name, unit, active, product_rows):
     sku = _resolve_sku(game, code, unit, active)
     if sku:
         return sku, "code"
-    return _resolve_by_name(name, unit, product_rows)
+    return _resolve_by_name(name, unit, product_rows, game)
 
 
 # ---- メイン書込 ----------------------------------------------------------------
