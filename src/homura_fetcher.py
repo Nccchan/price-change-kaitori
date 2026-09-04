@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 
 from src.config import get_master_data
 from src.models import CardItem, CompetitorData, CompetitorType, GameType
+from src.supabase_resolver import HomuraSupabaseResolver, normalize_ref
 
 
 class HomuraFetcher:
@@ -45,6 +46,18 @@ class HomuraFetcher:
         GameType.ONEPIECE:   {"price_1": 132, "price_2": 133},
         GameType.DRAGONBALL: {"price_1": 171, "price_2": None},  # カートンIDは未確認
         GameType.YUGIOH:     {"price_1": 159, "price_2": 172},
+    }
+
+    # 「その他」＝弾コードの無い商品棚（T-348 / work-log 2026-09-02）。
+    # price_1/price_2 のペア構造ではなく単一価格の商品リストなので、
+    # 通常の BOX/カートン合流（_merge）には流さず fetch_other_raw / resolve_other_items 専用経路で扱う。
+    # 2026-09-05 時点でホムラのサイトナビに存在確認できたのは pokemon=130・onepiece=160 のみ。
+    # dragonball / yugioh には同種の「その他」カテゴリがサイト上に見当たらない（要継続確認）。
+    OTHER_CATEGORY_IDS: Dict[GameType, List[int]] = {
+        GameType.POKEMON: [130],      # スペシャルセット
+        GameType.ONEPIECE: [160],     # ワンピースカード その他
+        GameType.DRAGONBALL: [],      # 未確認（2026-09-05時点でサイト上に専用カテゴリ無し）
+        GameType.YUGIOH: [],          # 未確認（同上）
     }
 
     def __init__(self) -> None:
@@ -180,6 +193,79 @@ class HomuraFetcher:
             for category_id, meta in self.CATEGORY_REGISTRY.items()
             if meta["mode"] != "manual"
         }
+
+    def fetch_other_raw(self, game: GameType) -> List[Dict]:
+        """「その他」カテゴリ（弾コード無し商品）の生データを取得する。書込は一切行わない。
+
+        ホムラのページは同一商品の h5 がレスポンシブ用に二重にマークアップされているため
+        (name, price) の組でここで重複除去してから返す。
+        """
+        cat_ids = self.OTHER_CATEGORY_IDS.get(game, [])
+        raw: List[Dict] = []
+        for cid in cat_ids:
+            raw.extend(self._fetch_category(cid))
+
+        seen: set = set()
+        deduped: List[Dict] = []
+        for it in raw:
+            name = self._clean_name(it["name"])
+            key = (self._normalize(name), it["price"])
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append({**it, "name": name})
+        return deduped
+
+    def resolve_other_item(self, item: Dict, resolver: HomuraSupabaseResolver) -> Dict:
+        """「その他」商品1件を2段で解決する（部分一致・推測はしない）。
+
+        1) 名前先頭の型式コード（例 "OP-01 ..."）があれば resolver.resolve(code) で完全一致
+        2) 無ければ表示名を正規化して products.homura_ref と完全一致
+
+        戻り値: {"name", "raw_code", "price", "method": "code"|"name"|None,
+                 "normalized_name", "matched": bool, "products": [...]}
+        """
+        name = item["name"]
+        inline_code, _short_name = self._extract_inline_code(name)
+        normalized_name = normalize_ref(name)
+
+        if inline_code:
+            rows = resolver.resolve(inline_code)
+            if rows:
+                return {
+                    **item,
+                    "method": "code",
+                    "matched_code": inline_code,
+                    "normalized_name": normalized_name,
+                    "matched": True,
+                    "products": rows,
+                }
+
+        rows = resolver.resolve_by_display_name(name)
+        if rows:
+            return {
+                **item,
+                "method": "name",
+                "matched_code": None,
+                "normalized_name": normalized_name,
+                "matched": True,
+                "products": rows,
+            }
+
+        return {
+            **item,
+            "method": None,
+            "matched_code": None,
+            "normalized_name": normalized_name,
+            "matched": False,
+            "products": [],
+        }
+
+    def resolve_other_items(
+        self, game: GameType, resolver: HomuraSupabaseResolver
+    ) -> List[Dict]:
+        """fetch_other_raw() の結果をまとめて2段解決する。report-only。"""
+        return [self.resolve_other_item(it, resolver) for it in self.fetch_other_raw(game)]
 
     def _extract_inline_code(self, name: str) -> tuple[Optional[str], str]:
         """名前の先頭にある型式コード (OP-01, PRB-01, EB-01, FB-01 等) を抽出する。

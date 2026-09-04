@@ -15,6 +15,8 @@ Phase A 本体（price_history への直接書込）に発展する基盤。
 from __future__ import annotations
 
 import os
+import re
+import unicodedata
 import logging
 from typing import Optional
 from urllib.parse import quote
@@ -22,6 +24,22 @@ from urllib.parse import quote
 import requests
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_ref(s: str) -> str:
+    """表示名マッチング用の正規化キー。
+
+    全角/半角統一（NFKC）→ 空白除去 → 記号除去 → 小文字化。
+    ホムラの「その他」カテゴリ商品（弾コード無し）を products.homura_ref の
+    表示名登録値と突き合わせるために使う。**部分一致ではなく、この正規化後の
+    完全一致のみ**を採用する（F-058 幻価格の再発防止・推測マッチ禁止）。
+    """
+    if not s:
+        return ""
+    s = unicodedata.normalize("NFKC", s)
+    s = re.sub(r"[\s　]", "", s)  # 半角/全角空白を除去
+    s = re.sub(r"[【】「」『』\[\]（）()・:：,、。※×＊*'’\-‐―—_/／]", "", s)  # 記号除去
+    return s.lower()
 
 
 class HomuraSupabaseResolver:
@@ -44,6 +62,7 @@ class HomuraSupabaseResolver:
         self.timeout = timeout
         self.enabled = bool(self.url and self.key)
         self._cache: dict[str, list[dict]] = {}
+        self._all_refs_cache: Optional[dict[str, list[dict]]] = None
         if not self.enabled:
             logger.warning(
                 "HomuraSupabaseResolver: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing — disabled"
@@ -132,6 +151,61 @@ class HomuraSupabaseResolver:
             self._cache.update(grouped)
 
         return {c: self._cache.get(c, []) for c in codes}
+
+    def resolve_all_homura_refs(self) -> dict[str, list[dict]]:
+        """
+        products.homura_ref が設定済みの全行を取得し、正規化キー（normalize_ref）で
+        グルーピングして返す。ホムラ「その他」カテゴリ（弾コード無し商品）を
+        表示名で突き合わせるために使う。1セッション内はキャッシュする。
+
+        該当なし/Supabase未到達時は {} を返す（呼び出し側は未突合として扱うこと。
+        **部分一致・推測でフォールバックしない**）。
+        """
+        if not self.enabled:
+            return {}
+        if self._all_refs_cache is not None:
+            return self._all_refs_cache
+        try:
+            r = requests.get(
+                f"{self.url}/rest/v1/products",
+                params={
+                    "select": "id,sku,product_type,homura_ref,is_active",
+                    "homura_ref": "not.is.null",
+                    "is_active": "eq.true",
+                },
+                headers={
+                    "apikey": self.key,
+                    "Authorization": f"Bearer {self.key}",
+                },
+                timeout=self.timeout,
+            )
+            r.raise_for_status()
+            rows = r.json()
+        except Exception as e:
+            logger.warning("HomuraSupabaseResolver: resolve_all_homura_refs failed: %s", e)
+            rows = []
+
+        grouped: dict[str, list[dict]] = {}
+        for row in rows:
+            ref = row.get("homura_ref") or ""
+            key = normalize_ref(ref)
+            if not key:
+                continue
+            grouped.setdefault(key, []).append(row)
+        self._all_refs_cache = grouped
+        return grouped
+
+    def resolve_by_display_name(self, display_name: str) -> list[dict]:
+        """
+        ホムラの表示名（弾コード無し商品）を正規化して products.homura_ref と突き合わせる。
+        完全一致のみ。該当なしは []。
+        """
+        if not self.enabled or not display_name:
+            return []
+        key = normalize_ref(display_name)
+        if not key:
+            return []
+        return self.resolve_all_homura_refs().get(key, [])
 
     def stats(self, homura_codes: list[str]) -> dict:
         """
