@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from src.models import UpdatePayload
 from src.supabase_writer import _resolve_by_name, _resolve_product, write_prices
@@ -31,7 +32,10 @@ class SupabaseResolverTests(unittest.TestCase):
 
     def test_onepiece_production_write_requires_approved_proposal(self):
         payload = UpdatePayload(2, "決戦の刻", "OP-16", 13200, None)
-        with self.assertRaisesRegex(RuntimeError, "proposal・approval"):
+        # The proposal gate is opt-in; test that mode explicitly rather than
+        # relying on a developer's environment or reaching production I/O.
+        with patch.dict("os.environ", {"KAITORI_OPE_REQUIRE_PROPOSAL": "1"}), \
+             self.assertRaisesRegex(RuntimeError, "proposal・approval"):
             write_prices("onepiece", [payload], dry_run=False)
 
 

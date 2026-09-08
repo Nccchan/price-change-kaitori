@@ -166,24 +166,32 @@ class HomuraSupabaseResolver:
         if self._all_refs_cache is not None:
             return self._all_refs_cache
         try:
-            r = requests.get(
-                f"{self.url}/rest/v1/products",
-                params={
-                    "select": "id,sku,product_type,homura_ref,is_active",
-                    "homura_ref": "not.is.null",
-                    "is_active": "eq.true",
-                },
-                headers={
-                    "apikey": self.key,
-                    "Authorization": f"Bearer {self.key}",
-                },
-                timeout=self.timeout,
-            )
-            r.raise_for_status()
-            rows = r.json()
+            rows = []
+            offset = 0
+            while True:
+                r = requests.get(
+                    f"{self.url}/rest/v1/products",
+                    params={
+                        "select": "id,sku,product_type,homura_ref,is_active",
+                        "homura_ref": "not.is.null",
+                        "is_active": "eq.true",
+                        "order": "id.asc", "limit": 1000, "offset": offset,
+                    },
+                    headers={"apikey": self.key, "Authorization": f"Bearer {self.key}"},
+                    timeout=self.timeout,
+                )
+                r.raise_for_status()
+                chunk = r.json()
+                if not isinstance(chunk, list):
+                    raise ValueError("products response is not a list")
+                rows.extend(chunk)
+                if len(chunk) < 1000:
+                    break
+                offset += 1000
         except Exception as e:
             logger.warning("HomuraSupabaseResolver: resolve_all_homura_refs failed: %s", e)
-            rows = []
+            # Never cache partial/failed results as a complete catalogue.
+            return {}
 
         grouped: dict[str, list[dict]] = {}
         for row in rows:

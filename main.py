@@ -651,11 +651,14 @@ def main(
                 from src import supabase_writer
                 supabase_writer.write_prices(game, payloads, dry_run=False)
             except Exception as e:
-                click.echo(f"  ⚠️ SB dual-write失敗（シート書込は成功済）: {e}")
+                click.echo(f"  ⚠️ Supabase価格書込失敗: {e}")
                 try:
                     supabase_writer._notify(f"⚠️ SB dual-write失敗 ({game}): {e}")
                 except Exception:
                     pass
+                # Supabase is now the price authority. Let the outer error
+                # handler exit nonzero so the scheduler cannot report success.
+                raise
 
         new_count = sum(1 for p in payloads if p.is_new)
         if new_count > 0:
