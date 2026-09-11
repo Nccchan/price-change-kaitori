@@ -92,6 +92,8 @@ def load_master(game: str) -> dict | None:
             rows = r.json()
             if not isinstance(rows, list) or not rows:
                 break
+            from src.collection_evidence import observe_mapping_rows
+            observe_mapping_rows(game, rows)
             for row in rows:
                 prod = row.get("products") or {}
                 sku = prod.get("sku", "")

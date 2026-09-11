@@ -1,0 +1,113 @@
+{
+  "artifact_sha256": "1b4ebb18cba0574977107b2dd87c2372e31d38a88a544c8d094783e21f53069c",
+  "attempt_id": "11111111-1111-4111-8111-111111111111",
+  "candidates": [
+    {
+      "category_id": 128,
+      "external_ref": "S1",
+      "external_unit": "BOX",
+      "identity_resolved": true,
+      "name": "Alpha",
+      "observed_at": "2026-09-11T04:17:20.826106+00:00",
+      "observed_price": 1000,
+      "page_url": "https://kaitori-homura.com/products?q[product_sub_category_id_eq]=128&page=1",
+      "parse_ok": true,
+      "raw_external_ref": "RAW1",
+      "raw_name": "Alpha",
+      "raw_price": "¥1,000",
+      "reason_code": "valid_price",
+      "url": "https://kaitori-homura.com/products/1"
+    },
+    {
+      "category_id": 129,
+      "external_ref": "S1",
+      "external_unit": "NS",
+      "identity_resolved": true,
+      "name": "Alpha",
+      "observed_at": "2026-09-11T04:17:20.827492+00:00",
+      "observed_price": 800,
+      "page_url": "https://kaitori-homura.com/products?q[product_sub_category_id_eq]=129&page=1",
+      "parse_ok": true,
+      "raw_external_ref": "RAW1",
+      "raw_name": "Alpha",
+      "raw_price": "¥800",
+      "reason_code": "valid_price",
+      "url": "https://kaitori-homura.com/products/1"
+    }
+  ],
+  "categories": [
+    {
+      "category_id": 128,
+      "complete": true,
+      "external_unit": "BOX",
+      "finished_at": "2026-09-11T04:17:20.827310+00:00",
+      "game": "pokemon",
+      "pages": [
+        {
+          "card_count": 1,
+          "observed_at": "2026-09-11T04:17:20.826106+00:00",
+          "parse_complete": true,
+          "parsed_count": 1,
+          "response_sha256": "0bbb2237735c193371417b3e3b5899c7098287d4cdcac00b522e1ec15314f0ca",
+          "terminal": true,
+          "url": "https://kaitori-homura.com/products?q[product_sub_category_id_eq]=128&page=1"
+        }
+      ],
+      "reason_code": "complete_category",
+      "started_at": "2026-09-11T04:17:20.825920+00:00"
+    },
+    {
+      "category_id": 129,
+      "complete": true,
+      "external_unit": "NS",
+      "finished_at": "2026-09-11T04:17:20.827940+00:00",
+      "game": "pokemon",
+      "pages": [
+        {
+          "card_count": 1,
+          "observed_at": "2026-09-11T04:17:20.827492+00:00",
+          "parse_complete": true,
+          "parsed_count": 1,
+          "response_sha256": "d8eb84d633069740c114791f7819c350d0e32c3732b6a7eb050c87ae479fcc0b",
+          "terminal": true,
+          "url": "https://kaitori-homura.com/products?q[product_sub_category_id_eq]=129&page=1"
+        }
+      ],
+      "reason_code": "complete_category",
+      "started_at": "2026-09-11T04:17:20.827318+00:00"
+    }
+  ],
+  "collector_version": {
+    "code_sha256": "6180ee4580c952df50c13e4f7c202cbb8e68becb366de9e73c2e4c7696a575c5",
+    "commit": "1d8aa8a697998b4389d5f91a9f35606629b109dd",
+    "dirty": true
+  },
+  "error_type": null,
+  "fetch_succeeded": true,
+  "game": "pokemon",
+  "generated_at": "2026-09-11T04:17:20.828202+00:00",
+  "mapping_inputs": [
+    {
+      "external_ref": "S1",
+      "products": {
+        "category": "Pokemon",
+        "sku": "PKM-S1-BOX"
+      },
+      "search_hint": "Alpha"
+    },
+    {
+      "external_ref": "S1",
+      "products": {
+        "category": "Pokemon",
+        "sku": "PKM-S1-NS"
+      },
+      "search_hint": "Alpha"
+    }
+  ],
+  "mapping_inputs_status": "ledger_complete",
+  "mapping_observed_at": "2026-09-11T04:17:20.828000+00:00",
+  "observed_at": "2026-09-11T04:17:20.826106+00:00",
+  "schema_version": 2,
+  "source": "homura",
+  "started_at": "2026-09-11T04:17:20.825590+00:00"
+}

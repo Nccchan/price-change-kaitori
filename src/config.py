@@ -270,7 +270,11 @@ def get_master_data(game: str) -> dict:
             from ledger_master import load_master
         led = load_master(game)
         if led:
+            from src.collection_evidence import observe_mapping_source
+            observe_mapping_source(game, "ledger_complete")
             return led
     except Exception:
         pass
+    from src.collection_evidence import observe_mapping_source
+    observe_mapping_source(game, "config_fallback")
     return _config_master(game)
