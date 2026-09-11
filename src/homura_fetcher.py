@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 from src.config import get_master_data
 from src.models import CardItem, CompetitorData, CompetitorType, GameType
 from src.supabase_resolver import HomuraSupabaseResolver, normalize_ref
+from src.collection_evidence import observed_fetch, observe
 
 
 class HomuraFetcher:
@@ -69,6 +70,7 @@ class HomuraFetcher:
             "Chrome/120.0.0.0 Safari/537.36"
         )
 
+    @observed_fetch
     def fetch(self, game: GameType, today: Optional[str] = None) -> CompetitorData:
         """ホムラのウェブサイトから指定ゲームの価格を取得して CompetitorData を返す"""
         cat_ids = self.CATEGORY_IDS.get(game, {})
@@ -94,6 +96,7 @@ class HomuraFetcher:
 
     def _fetch_category(self, category_id: int) -> List[Dict]:
         """指定カテゴリの全ページから商品リストを取得"""
+        observe(self, "category_started", category_id, self.CATEGORY_REGISTRY.get(category_id, {}))
         results = []
         page = 1
         while True:
@@ -105,8 +108,10 @@ class HomuraFetcher:
             resp = self.session.get(url, params=params, timeout=20)
             resp.raise_for_status()
 
+            observe(self, "page_received", f"{url}?q[product_sub_category_id_eq]={category_id}&page={page}", resp.text)
             items = self._parse_page(resp.text)
             if not items:
+                observe(self, "page_finished", True)
                 break
             results.extend(items)
 
@@ -117,10 +122,12 @@ class HomuraFetcher:
                 or soup.find("a", string=re.compile(r"次|next", re.I))
                 or soup.find("li", class_=re.compile(r"next"))
             )
+            observe(self, "page_finished", not bool(next_link))
             if not next_link:
                 break
             page += 1
 
+        observe(self, "category_finished")
         return results
 
     def _parse_page(self, html: str) -> List[Dict]:
@@ -144,7 +151,9 @@ class HomuraFetcher:
         soup = BeautifulSoup(html, "html.parser")
         items = []
 
-        for h5 in soup.find_all("h5"):
+        cards = soup.find_all("h5")
+        observe(self, "card_count", len(cards))
+        for h5 in cards:
             raw_name = h5.get_text(strip=True)
             name = self._clean_name(raw_name)
             if not name:
@@ -164,13 +173,17 @@ class HomuraFetcher:
 
             # 価格: カードコンテナ内で "X,XXX円" パターンの<span>を探す
             price: Optional[int] = None
+            price_text = ""
             for span in card_div.find_all("span"):
                 text = span.get_text(strip=True)
                 m = re.search(r"¥\s*([\d,]+)", text)
                 if m:
                     price = int(m.group(1).replace(",", ""))
+                    price_text = text
                     break
 
+            observe(self, "candidate", raw_name, name, code_text,
+                    requests.compat.urljoin(self.BASE_URL, link.get("href", "")), price, price_text)
             if price is not None:
                 items.append({"name": name, "raw_code": code_text, "price": price})
 
@@ -314,6 +327,8 @@ class HomuraFetcher:
                 m[key] = {"name": display_name, "code": code, "price": it["price"]}
             return m
 
+        observe(self, "resolved_candidates", resolve, master,
+                self._normalize, self._extract_inline_code)
         p1_map = to_map(items_1)
         p2_map = to_map(items_2)
 

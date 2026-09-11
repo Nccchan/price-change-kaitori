@@ -377,6 +377,8 @@ def write_prices(
     # 困るのは「同じ日のうちに、POPや投稿に出した価格が黙って書き換わる」こと。
     # よって JST の同日中に source='natsuki-decision' がある (product_id, unit) だけ書込をスキップする。
     rows, held = _hold_same_day_manual(rows)
+    from src.collection_evidence import observe_manual_holds
+    observe_manual_holds(game, held)
     if held:
         print(f"[manual-hold] 本日のなつき決裁値を維持（再計算をスキップ）: {len(held)}件")
         for h in held[:10]:

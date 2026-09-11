@@ -401,6 +401,9 @@ def main(
     large_changes = comparator.get_large_changes(results)
     decrease_holds = comparator.get_decrease_holds(game, results)
     increase_holds = comparator.get_increase_holds(game, results)
+    from src.collection_evidence import observe_comparison
+    observe_comparison(game, results, decrease_holds, increase_holds,
+                       approve_price_decreases, approve_price_increases)
     click.echo(f"  完了: 要対応 {len(attention_items)} 商品 / 大幅変動 {len(large_changes)} 商品")
     if decrease_holds and not approve_price_decreases:
         click.echo(f"  大幅値下げ要承認: {len(decrease_holds)}件（自動反映から除外）")

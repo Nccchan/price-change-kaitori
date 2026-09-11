@@ -238,8 +238,14 @@ class PriceComparator:
                 )
             )
 
-        from src.price_guard import guard_payloads
-        accepted, violations = guard_payloads(game, payloads)
+        from src.price_guard import guard_payloads, BatchPriceGuardError
+        from src.collection_evidence import observe_payloads
+        try:
+            accepted, violations = guard_payloads(game, payloads)
+        except BatchPriceGuardError as exc:
+            observe_payloads(game, payloads, exc.violations, batch_stopped=True)
+            raise
+        observe_payloads(game, accepted, violations)
         for violation in violations:
             print(
                 f"  [REJECT] {violation.name} ({violation.code}): "
