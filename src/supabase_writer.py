@@ -276,6 +276,12 @@ def _resolve_product(game, code, name, unit, active, product_rows):
     sku = _resolve_sku(game, code, unit, active)
     if sku:
         return sku, "code"
+    # An explicit expansion code that cannot be resolved is not permission to
+    # use another expansion with the same name. Barcode/name-only inputs still
+    # retain the existing unique-name fallback for special products.
+    normalized = _code_to_stem(game, code)
+    if re.fullmatch(r"(?:OP|EB|PRB|FB|SB|ST)\d{1,2}|(?:SM|SV|S|M)\d{1,3}[A-Z]*(?:-[A-Z0-9]+)?", normalized):
+        return None, "unresolved-code"
     return _resolve_by_name(name, unit, product_rows, game)
 
 
