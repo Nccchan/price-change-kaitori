@@ -52,6 +52,9 @@ import sys
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# notify_dedupe は org 側（別リポジトリ）の共通部品をそのまま import する
+# （_ORG_ROOT は src/supabase_writer.py と同じ決め打ちパス）。
+sys.path.insert(0, "/Users/nastuki_sever/aigive/org/scripts/utils")
 
 from dotenv import load_dotenv
 
@@ -63,8 +66,13 @@ from src.supabase_resolver import HomuraSupabaseResolver
 from src.supabase_writer import _rest, _conf, _latest_kaitori_prices, JST, _notify
 from src.price_increase_guard import should_hold as increase_should_hold
 from src.price_decrease_guard import should_hold as decrease_should_hold
+from notify_dedupe import notify_if_new  # noqa: E402
 
 MARGIN_BOX = 200  # 「BOXと同じ扱い」(A: PKM BOX margin) に合わせる
+
+# 毎時cronで同じ「値上げ/値下げ要承認」を繰り返し送らないための重複抑止状態ファイル。
+# 保留が続く限り current は動かず proposed もほぼ同じなので、無抑止だと毎時同文が飛ぶ。
+NOTIFY_STATE = "/Users/nastuki_sever/aigive/org/logs/notify-state/special_follow_kaitori.json"
 
 # 表示名はホムラの実掲載文言そのもの（2026-09-16 実測・fetch_other_raw で確認済み）。
 # resolve_other_item は products.homura_ref をこの文字列に正規化一致させて解決する。
@@ -164,7 +172,8 @@ def run(apply: bool):
                        f"(+¥{inc:,}, +{rate:.1%})")
                 print(msg)
                 if apply:
-                    _notify(msg)
+                    if not notify_if_new(NOTIFY_STATE, msg, _notify):
+                        print("（同一内容を24時間以内に通知済みのためスキップ）")
                 continue
             hold, dec, rate = decrease_should_hold(current, proposed, "BOX")
             if hold:
@@ -172,7 +181,8 @@ def run(apply: bool):
                        f"(-¥{dec:,}, -{rate:.1%})")
                 print(msg)
                 if apply:
-                    _notify(msg)
+                    if not notify_if_new(NOTIFY_STATE, msg, _notify):
+                        print("（同一内容を24時間以内に通知済みのためスキップ）")
                 continue
 
             print(f"[candidate] {sku} {unit}: ¥{current if current is not None else '(未取得)'}"
