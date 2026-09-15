@@ -74,6 +74,54 @@ def _rest(path, method="GET", body=None):
 
 
 MANUAL_SOURCE = "natsuki-decision"
+JST = timezone(timedelta(hours=9))
+
+
+def _jst_date(value):
+    """price_history.valid_from（ISO文字列）をJSTの日付(date)に変換。壊れていればNone。"""
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(JST).date()
+    except (ValueError, TypeError):
+        return None
+
+
+def _latest_kaitori_prices(product_ids):
+    """(product_id, unit) → (最新value, 最新valid_from) を返す。kind=kaitori・source不問。
+
+    T-508（2026-09-16 毎時化）: 差分だけ書くための下敷き。supabase_reader.py の
+    「現在価格」取得と同じクエリ・チャンク方式（50件ずつ・valid_from降順・先頭を採用）を流用。
+    """
+    latest = {}
+    ids = [i for i in dict.fromkeys(product_ids) if i]  # 順序維持で重複除去
+    for i in range(0, len(ids), 50):
+        chunk = ",".join(ids[i:i + 50])
+        for r in _rest(f"price_history?kind=eq.kaitori&product_id=in.({chunk})"
+                       f"&select=product_id,unit,value,valid_from"
+                       f"&order=valid_from.desc&limit=10000"):
+            k = (r["product_id"], r["unit"])
+            if k not in latest:  # desc なので最初が最新
+                latest[k] = (int(r["value"]), r["valid_from"])
+    return latest
+
+
+def _drop_unchanged_today(rows):
+    """差分だけ書く（T-508）: 前回のprice_history最新値と同じ、かつ既にJSTの今日
+    書き込み済みなら書かない。値が変わった行・今日まだ一度も書いていない行は必ず通す
+    （kaitori_stale_to_prep.py 等の「48h以内にprice_historyの行があるか」判定は
+    “その日1回は必ず書く”を前提にしているため、これを崩さない）。
+    """
+    if not rows:
+        return rows, 0
+    latest = _latest_kaitori_prices({r["product_id"] for r in rows})
+    today = datetime.now(JST).date()
+    kept, skipped = [], 0
+    for r in rows:
+        prev = latest.get((r["product_id"], r["unit"]))
+        if prev is not None and prev[0] == r["value"] and _jst_date(prev[1]) == today:
+            skipped += 1
+            continue
+        kept.append(r)
+    return kept, skipped
 
 
 def _hold_same_day_manual(rows):
@@ -388,11 +436,17 @@ def write_prices(
                      observed={"calculated": [h["calc"] for h in held[:20]]},
                      note=f"当日のなつき決裁値を維持し再計算を見送り {len(held)}件（翌日は通常ルールに戻る）")
 
+    # T-508（2026-09-16 毎時化）: 差分だけ書く。値が前回と同じ、かつ今日(JST)既に
+    # 書込済みならスキップ。値上げ5%(実装上は20%上限)ガード・準備中保護・48hルールは
+    # 上のガード群で既に確定済みの行に対してのみ判定するので、ここでの間引きは影響しない。
+    rows, unchanged_skipped = _drop_unchanged_today(rows)
+
     if dry_run:
-        print(f"[sb-dual-write DRY-RUN] {game}: insert予定 {len(rows)} 行 / 未解決 {len(unresolved)}件 / 準備中skip {prep_skipped}件")
+        print(f"[sb-dual-write DRY-RUN] {game}: insert予定 {len(rows)} 行 / "
+              f"未解決 {len(unresolved)}件 / 準備中skip {prep_skipped}件 / 差分なしskip {unchanged_skipped}件")
         if unresolved:
             print(f"  未解決: {unresolved}")
-        return {"would_insert": len(rows), "unresolved": unresolved}
+        return {"would_insert": len(rows), "unresolved": unresolved, "unchanged_skipped": unchanged_skipped}
 
     for i in range(0, len(rows), 200):  # fail-soft: チャンク投入
         _rest("price_history", method="POST", body=rows[i:i + 200])
@@ -410,5 +464,6 @@ def write_prices(
     if unresolved:
         _notify("⚠️ [SB dual-write] price_history 未解決SKU "
                 f"{len(unresolved)}件（{game}）: {unresolved[:15]}")
-    print(f"[sb-dual-write] {game}: {len(rows)}行INSERT / 未解決{len(unresolved)}件 / 準備中skip{prep_skipped}件")
-    return {"inserted": len(rows), "unresolved": unresolved}
+    print(f"[sb-dual-write] {game}: {len(rows)}行INSERT / 未解決{len(unresolved)}件 / "
+          f"準備中skip{prep_skipped}件 / 差分なしskip{unchanged_skipped}件")
+    return {"inserted": len(rows), "unresolved": unresolved, "unchanged_skipped": unchanged_skipped}

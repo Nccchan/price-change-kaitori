@@ -4,6 +4,7 @@
 kaitori-homura.com の商品ページをスクレイピングして CompetitorData を返す。
 """
 import re
+import time
 import unicodedata
 from datetime import date
 from typing import Dict, List, Optional
@@ -78,10 +79,13 @@ class HomuraFetcher:
         cat_2 = cat_ids.get("price_2")
 
         items_1 = self._fetch_category(cat_1) if cat_1 else []
+        if cat_1 and cat_2:
+            time.sleep(1)  # T-508: カテゴリ間も1秒間隔
         items_2 = self._fetch_category(cat_2) if cat_2 else []
 
         # price_1_extra: スペシャル/プロモ枠を price_1 相当として合流。
         for ec in (cat_ids.get("price_1_extra") or []):
+            time.sleep(1)
             items_1 += self._fetch_category(ec)
 
         merged = self._merge(items_1, items_2, game)
@@ -100,6 +104,10 @@ class HomuraFetcher:
         results = []
         page = 1
         while True:
+            # T-508（2026-09-16 毎時化）: 1日1回から毎時に増えるため、サイトへの
+            # 負荷に配慮してページ間に1秒間隔を空ける（初回リクエストは待たない）。
+            if page > 1:
+                time.sleep(1)
             url = f"{self.BASE_URL}/products"
             params = {
                 "q[product_sub_category_id_eq]": category_id,
