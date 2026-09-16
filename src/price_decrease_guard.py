@@ -1,9 +1,17 @@
-"""買取価格の大幅値下げを承認待ちにする純粋ロジック。"""
+"""買取価格の値下げガード（純粋ロジック）。
+
+2026-09-16 なつき決定（Telegram 15:38）「値下げは全部承認」により、
+値下げは幅を問わず自動反映する。保留するのは取得ミス疑いの
+50%以上の急落のみ（例: 30th CELEBRATION FUTURISTIC BOX 50,000→35,000 = -30%は自動反映対象、
+50%を超えるような値は取得ミスを疑って要確認）。
+"""
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 
-DECREASE_RATE_LIMIT = 0.10
+DECREASE_RATE_LIMIT = 0.50
+# 以下2定数は 2026-09-16 なつき決定「値下げは全承認」により判定に未使用。
+# 円額での保留はしない（should_hold は decrease_rate のみで判定する）。互換のため残置。
 BOX_NS_YEN_LIMIT = 3_000
 CARTON_YEN_LIMIT = 20_000
 
@@ -24,8 +32,7 @@ def should_hold(current: Optional[int], proposed: Optional[int], unit: str) -> T
         return False, 0, 0.0
     decrease = current - proposed
     rate = decrease / current if current > 0 else 0.0
-    yen_limit = CARTON_YEN_LIMIT if unit == "CARTON" else BOX_NS_YEN_LIMIT
-    return rate > DECREASE_RATE_LIMIT or decrease > yen_limit, decrease, rate
+    return rate >= DECREASE_RATE_LIMIT, decrease, rate
 
 
 def evaluate_result(game: str, result) -> List[DecreaseHold]:
@@ -47,7 +54,7 @@ def evaluate_result(game: str, result) -> List[DecreaseHold]:
 def format_holds(holds: List[DecreaseHold]) -> str:
     if not holds:
         return ""
-    lines = [f"⚠️ 買取価格 大幅値下げ要承認: {len(holds)}件"]
+    lines = [f"⚠️ 買取価格 50%以上の急落（取得ミス疑い・要確認）: {len(holds)}件"]
     for h in holds:
         lines.append(
             f"- {h.name} ({h.code or '型番なし'}) {h.unit}: "
