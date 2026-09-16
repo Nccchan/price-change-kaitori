@@ -13,6 +13,9 @@ ENABLE_SB_DUAL_WRITE=1 のときだけ main.py から呼ばれる。シート書
 import os
 import re
 import json
+import socket
+import time
+import urllib.error
 import urllib.request
 import urllib.parse
 import unicodedata
@@ -61,16 +64,44 @@ def _notify(text):
 
 
 # ---- Supabase REST -------------------------------------------------------------
-def _rest(path, method="GET", body=None):
+def _is_timeout_error(exc):
+    """socket.timeout（read timeout）と urllib.error.URLError(reason=timeout)（connect
+    timeout）の両方を1つの判定にまとめる。timeout以外（HTTPError等）はここでFalse。"""
+    if isinstance(exc, socket.timeout):
+        return True
+    if isinstance(exc, urllib.error.URLError) and isinstance(exc.reason, socket.timeout):
+        return True
+    return False
+
+
+def _rest(path, method="GET", body=None, retries=1):
+    """F-232（2026-09-16）: 30秒タイムアウトでリトライが無く、毎時実行で偶発的な
+    タイムアウト1回がそのままdual-write失敗（DBZ分の書込漏れ）になっていた。
+    タイムアウトのときだけ（HTTPError等の応答があるエラーはリトライしない）短い待ち後に
+    最大 retries 回再試行する。GET/POSTいずれも冪等でない可能性はあるが、Supabaseは
+    宛先未達（タイムアウト＝応答が返る前に切れた）を対象にするため、書込が実際に
+    サーバ側で成立していた場合は price_history に重複行が増えるだけ（追記専用ログなので
+    実害は小さい・読み出しは valid_from 最新優先のため影響しない）。何も書けないまま
+    毎時1回分が欠測するリスクの方が大きいと判断。
+    """
     url, key, _, _ = _conf()
     if not url or not key:
         raise RuntimeError("Supabase認証情報が無い（NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY）")
     headers = {"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json"}
     data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(f"{url}/rest/v1/{path}", data=data, method=method, headers=headers)
-    with urllib.request.urlopen(req, timeout=30) as r:
-        raw = r.read()
-        return json.loads(raw) if raw else []
+    attempt = 0
+    while True:
+        req = urllib.request.Request(f"{url}/rest/v1/{path}", data=data, method=method, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                raw = r.read()
+                return json.loads(raw) if raw else []
+        except Exception as e:
+            if attempt < retries and _is_timeout_error(e):
+                attempt += 1
+                time.sleep(2)
+                continue
+            raise
 
 
 MANUAL_SOURCE = "natsuki-decision"
