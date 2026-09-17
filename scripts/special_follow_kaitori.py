@@ -17,8 +17,8 @@ CATEGORY_REGISTRY で 130 (pokemon_special) は mode="monitor"（監視のみ・
   PKM-M6A-DECK（30th CELEBRATION プレミアムデッキセット エーフィ・ブラッキー）
 
 products.homura_ref にホムラの表示名（そのまま・正規化して突合）を設定し、
-external_price_sources に kind="special" の行を追加して対象化する（--setup-sources）。
-`kind="special"` は collection_supervision.build_manifest() の special 判定に使われ、
+external_price_sources に kind="manual" の行を追加して対象化する（--setup-sources）。価格マージンは active pricing_rules を読み、固定値を持たない。
+`kind="manual"` は collection_supervision.build_manifest() の special 判定に使われ、
 標準コレクタ（カテゴリ128/129の巡回）の「期待に反する」扱いにはならない。
 
 ## 取得方式
@@ -36,6 +36,8 @@ resolve_other_item・src/supabase_resolver.HomuraSupabaseResolver）をそのま
   - 準備中(kaitori_prep)は書込を止めない（取得側は常に最新を書く。公開可否はflag側の役割。
     既存の write_prices() と同じ方針）
   - 0円/未掲載/名前不一致は書かない（新規公開はなつき承認、フォロー開始後の欠測は保留のみ）
+  - 台帳/価格ルール/当日手動決定は実行時に確認。欠測・曖昧は非ゼロ終了。
+  - 取得成功と guard/manual 保留は別。dry-run 成功は公開完了を意味しない。
 
 使い方:
   python scripts/special_follow_kaitori.py --setup-sources   # homura_ref/external_price_sources を1回設定
@@ -47,9 +49,11 @@ resolve_other_item・src/supabase_resolver.HomuraSupabaseResolver）をそのま
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # notify_dedupe は org 側（別リポジトリ）の共通部品をそのまま import する
@@ -62,13 +66,16 @@ load_dotenv()
 
 from src.homura_fetcher import HomuraFetcher
 from src.models import GameType
-from src.supabase_resolver import HomuraSupabaseResolver
-from src.supabase_writer import _rest, _conf, _latest_kaitori_prices, JST, _notify
+from src.supabase_resolver import HomuraSupabaseResolver, normalize_ref
+from src.supabase_writer import (_rest, _conf, _latest_kaitori_prices, _notify,
+    _hold_same_day_manual, _drop_unchanged_today, read_back)
 from src.price_increase_guard import should_hold as increase_should_hold
 from src.price_decrease_guard import should_hold as decrease_should_hold
-from notify_dedupe import notify_if_new  # noqa: E402
-
-MARGIN_BOX = 200  # 「BOXと同じ扱い」(A: PKM BOX margin) に合わせる
+def notify_if_new(*args):
+    # Optional on a developer's machine; dry-run must not depend on the Mac's
+    # notification installation. The production notifier is still shared.
+    from notify_dedupe import notify_if_new as send
+    return send(*args)
 
 # 毎時cronで同じ「値上げ/値下げ要承認」を繰り返し送らないための重複抑止状態ファイル。
 # 保留が続く限り current は動かず proposed もほぼ同じなので、無抑止だと毎時同文が飛ぶ。
@@ -133,95 +140,134 @@ def setup_sources():
             print(f"[setup] {sku}: external_price_sources 新規作成")
 
 
-def _current_price(product_id: str, unit: str):
-    latest = _latest_kaitori_prices([product_id])
-    row = latest.get((product_id, unit))
-    return row[0] if row else None
+def active_box_rule():
+    """Use the same active pricing_rules row as read-pricing-rule.py, no +200 copy."""
+    rules = _rest("pricing_rules?status=eq.active&select=version,rule_json&limit=2")
+    if len(rules) != 1:
+        raise ValueError("active_rule_not_unique")
+    rule = rules[0]
+    kaitori = rule["rule_json"].get("kaitori", {})
+    if kaitori.get("categories"):
+        policy = kaitori["categories"].get("PKM", {})
+        if policy.get("enabled") is not True or policy.get("source") != "homura":
+            raise ValueError("homura_rule_disabled")
+    else:
+        policy = kaitori
+        if policy.get("source_primary") != "homura":
+            raise ValueError("homura_rule_disabled")
+    margin = policy.get("box_offset")
+    if type(margin) is not int or margin < 0:
+        raise ValueError("box_offset_invalid")
+    # The wrapper already loaded this rule. Refuse to run half of a cycle on a
+    # newer rule instead of silently mixing versions/offsets across collectors.
+    if os.getenv("RULE_VERSION") not in (None, str(rule["version"])):
+        raise ValueError("rule_version_changed")
+    return margin, rule["version"]
 
 
-def run(apply: bool):
+def validate_target(product, contracts, candidates):
+    """BOX here is the DB price lane, not a claim of a sealed booster box."""
+    if not product or product.get("is_active") is not True or product.get("kaitori_hidden") is not False:
+        return None, "product_unavailable"
+    if product.get("category") != "Pokemon" or not product.get("product_type"):
+        return None, "product_identity_invalid"
+    unit = product.get("canonical_unit")
+    if unit != "BOX":
+        return None, "canonical_unit_changed"
+    if len(contracts) != 1:
+        return None, "source_contract_not_unique"
+    contract = contracts[0]
+    if (contract.get("source") != "homura" or contract.get("status") != "active"
+            or contract.get("kind") != "manual" or contract.get("unit_verified") is not True
+            or contract.get("unit") != unit or contract.get("derive_rule") or contract.get("derive_from_sku")):
+        return None, "source_contract_invalid"
+    ref = normalize_ref(product.get("homura_ref"))
+    if not ref or normalize_ref(contract.get("external_ref")) != ref:
+        return None, "source_ref_difference"
+    if len(candidates) != 1:
+        return None, "listing_unconfirmed" if not candidates else "ambiguous_listing"
+    candidate = candidates[0]
+    if normalize_ref(candidate.get("name")) != ref:
+        return None, "listing_identity_difference"
+    matches = candidate.get("products", [])
+    if len(matches) != 1 or matches[0].get("id") != product["id"]:
+        return None, "ambiguous_product_match"
+    if type(candidate.get("price")) is not int or candidate["price"] <= 0:
+        return None, "invalid_observed_price"
+    return candidate, None
+
+
+def run(apply: bool, report_path=None):
+    margin, rule_version = active_box_rule()
     sb_url, sb_key, _, _ = _conf()
     resolver = HomuraSupabaseResolver(url=sb_url, service_key=sb_key)
     if not resolver.enabled:
-        print("[special-follow] Supabase未接続のため中止（SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY未設定）")
-        return 1
-    fetcher = HomuraFetcher()
-    resolved = fetcher.resolve_other_items(GameType.POKEMON, resolver)
-
+        raise RuntimeError("database_unavailable")
     prods = {r["sku"]: r for r in _rest(
-        "products?select=id,sku,homura_ref&sku=in.(" + ",".join(TARGETS) + ")")}
-
-    rows = []
-    for item in resolved:
-        for p in item.get("products", []):
-            sku = p.get("sku")
-            if sku not in TARGETS:
-                continue
-            product_id = prods.get(sku, {}).get("id") or p.get("id")
-            unit = TARGETS[sku]["unit"]
-            raw_price = item.get("price")
-            if not isinstance(raw_price, int) or raw_price <= 0:
-                print(f"[skip] {sku}: 価格が不正 ({raw_price!r})")
-                continue
-            proposed = raw_price + MARGIN_BOX
-            current = _current_price(product_id, unit)
-
-            hold, inc, rate = increase_should_hold(current, proposed)
-            if hold:
-                msg = (f"⚠️ [special-follow] 値上げ要承認 {sku}: ¥{current:,}→¥{proposed:,} "
-                       f"(+¥{inc:,}, +{rate:.1%})")
-                print(msg)
-                if apply:
-                    if not notify_if_new(NOTIFY_STATE, msg, _notify):
-                        print("（同一内容を24時間以内に通知済みのためスキップ）")
-                continue
-            hold, dec, rate = decrease_should_hold(current, proposed, "BOX")
-            if hold:
-                msg = (f"⚠️ [special-follow] 値下げ要承認 {sku}: ¥{current:,}→¥{proposed:,} "
-                       f"(-¥{dec:,}, -{rate:.1%})")
-                print(msg)
-                if apply:
-                    if not notify_if_new(NOTIFY_STATE, msg, _notify):
-                        print("（同一内容を24時間以内に通知済みのためスキップ）")
-                continue
-
-            print(f"[candidate] {sku} {unit}: ¥{current if current is not None else '(未取得)'}"
-                  f" -> ¥{proposed:,}（ホムラ {raw_price:,}+{MARGIN_BOX}）")
-            rows.append({"product_id": product_id, "kind": "kaitori", "unit": unit,
-                         "currency": "JPY", "value": proposed,
-                         "source": "price-change-kaitori",
-                         "valid_from": datetime.now(timezone.utc).isoformat()})
-
-    found_skus = {r["product_id"] for r in rows}
-    for sku in TARGETS:
-        pid = prods.get(sku, {}).get("id")
-        if pid and pid not in found_skus and not any(
-                p.get("sku") == sku for item in resolved for p in item.get("products", [])):
-            print(f"[not-listed] {sku}: 本日のカテゴリ130にホムラ表示が無い（書込なし・保留のみ）")
-
-    # T-508と同じ「差分だけ書く」（前回と同値・今日(JST)書込済みならskip）。
-    if rows:
-        today = datetime.now(JST).date()
-        latest = _latest_kaitori_prices([r["product_id"] for r in rows])
-        kept = []
-        for r in rows:
-            prev = latest.get((r["product_id"], r["unit"]))
-            if prev is not None and prev[0] == r["value"]:
-                from src.supabase_writer import _jst_date
-                if _jst_date(prev[1]) == today:
-                    print(f"[skip-unchanged] product_id={r['product_id']} {r['unit']}: 差分なし・本日既に書込済み")
-                    continue
-            kept.append(r)
-        rows = kept
-
-    if not apply:
-        print(f"[special-follow DRY-RUN] insert予定 {len(rows)} 行")
-        return 0
-
-    for row in rows:
-        _rest("price_history", method="POST", body=[row])
-    print(f"[special-follow] {len(rows)}行INSERT")
-    return 0
+        "products?select=id,sku,homura_ref,canonical_unit,product_type,category,is_active,kaitori_hidden,kaitori_prep"
+        "&sku=in.(" + ",".join(TARGETS) + ")")}
+    ids = ",".join(p["id"] for p in prods.values())
+    contracts = _rest("external_price_sources?select=*&source=eq.homura&product_id=in.(" + ids + ")") if ids else []
+    resolved = HomuraFetcher().resolve_other_items(GameType.POKEMON, resolver)
+    now = datetime.now(timezone.utc).isoformat()
+    latest = _latest_kaitori_prices([p["id"] for p in prods.values()])
+    rows, results = [], []
+    for sku in TARGETS:  # approval scope only; identity/rule/unit come from the ledger
+        product = prods.get(sku)
+        pid = (product or {}).get("id")
+        ref = normalize_ref((product or {}).get("homura_ref"))
+        candidates = [it for it in resolved if ref and normalize_ref(it.get("name")) == ref]
+        candidate, reason = validate_target(product, [c for c in contracts if c["product_id"] == pid], candidates)
+        result = {"sku": sku, "product_id": pid, "result": "blocked", "reason_code": reason,
+                  "observed_at": now, "source": "homura", "category_id": 130,
+                  "external_unit": "SPECIAL_SET", "canonical_unit": (product or {}).get("canonical_unit"),
+                  "product_type": (product or {}).get("product_type"), "rule_version": rule_version}
+        results.append(result)
+        if reason:
+            continue
+        raw_price = candidate["price"]
+        proposed = raw_price + margin
+        current = latest.get((pid, product["canonical_unit"]), (None, None))[0]
+        result.update(observed_price=raw_price, proposed_price=proposed, current_price=current,
+                      external_ref=product["homura_ref"], result="success", reason_code=None)
+        row = {"product_id": pid, "kind": "kaitori", "unit": product["canonical_unit"],
+               "currency": "JPY", "value": proposed, "source": "price-change-kaitori", "valid_from": now}
+        allowed, held = _hold_same_day_manual([row], strict=True)
+        if held:
+            result.update(write_action="manual_hold", reason_code="same_day_natsuki_decision")
+            continue
+        hold_up, _, _ = increase_should_hold(current, proposed)
+        hold_down, _, _ = decrease_should_hold(current, proposed, product["canonical_unit"])
+        if hold_up or hold_down:
+            result.update(write_action="guard_hold", reason_code="increase_guard" if hold_up else "decrease_guard")
+            msg = f"[special-follow] {sku}: {current} -> {proposed} ({result['reason_code']})"
+            print(msg)
+            if apply:
+                notify_if_new(NOTIFY_STATE, msg, _notify)
+            continue
+        allowed, skipped = _drop_unchanged_today(allowed)
+        result["write_action"] = "unchanged" if skipped else "candidate"
+        rows.extend(allowed)
+    failures = [r for r in results if r["result"] != "success"]
+    # A missing/ambiguous target is no longer a successful zero-row run. It also
+    # cannot cause a half-applied initial release of the two approved sets.
+    inserted = 0
+    if apply and not failures:
+        if rows:
+            _rest("price_history", method="POST", body=rows)
+            inserted = len(rows)
+        expected = [{"product_id": r["product_id"], "unit": r["canonical_unit"], "value": r["proposed_price"]}
+                    for r in results if r.get("write_action") in {"candidate", "unchanged"}]
+        verdict, _ = read_back("pokemon-special", expected, "special-follow-" + now)
+        if verdict != "PASS":
+            failures.append({"reason_code": "readback_failed"})
+    report = {"checked_at": now, "applied": apply and not failures, "inserted": inserted, "rule_version": rule_version,
+              "ok": not failures, "results": results, "would_insert": len(rows),
+              "publication_checked": False}
+    if report_path:
+        Path(report_path).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    print(json.dumps(report, ensure_ascii=False))
+    return 2 if failures else 0
 
 
 def main():
@@ -229,11 +275,21 @@ def main():
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--setup-sources", action="store_true",
                      help="products.homura_ref / external_price_sources を対象2点に設定して終了")
+    ap.add_argument("--report-json", help="Local preflight report; does not authorize publication")
     args = ap.parse_args()
     if args.setup_sources:
         setup_sources()
         return 0
-    return run(args.apply)
+    try:
+        return run(args.apply, args.report_json)
+    except Exception as exc:
+        # Do not print arbitrary HTTP responses or environment/credential data.
+        report = {"ok": False, "error_type": type(exc).__name__, "publication_checked": False}
+        output = json.dumps(report, ensure_ascii=False) + "\n"
+        if args.report_json:
+            Path(args.report_json).write_text(output)
+        print(output)
+        return 2
 
 
 if __name__ == "__main__":

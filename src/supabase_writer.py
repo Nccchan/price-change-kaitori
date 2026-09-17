@@ -155,7 +155,7 @@ def _drop_unchanged_today(rows):
     return kept, skipped
 
 
-def _hold_same_day_manual(rows):
+def _hold_same_day_manual(rows, *, strict=False):
     """JSTの同日中になつき決裁値がある (product_id, unit) は、再計算の書込を見送る。
 
     「後から書いた方が勝つ」設計自体は維持する（翌日のホムラ取得では通常ルールに戻る）。
@@ -178,6 +178,11 @@ def _hold_same_day_manual(rows):
             for row in got:
                 manual.setdefault((row["product_id"], row["unit"]), int(row["value"]))
     except Exception as e:
+        if strict:
+            # Callers requiring a verified release decision must not infer that
+            # no manual decision exists from a failed read. Legacy callers keep
+            # their existing behavior until the managed cycle replaces them.
+            raise RuntimeError("manual_decision_read_failed") from e
         # 照会に失敗したら握りつぶさず、従来どおり書く（＝安全側は"止めない"）。
         print(f"[manual-hold] 決裁値の照会に失敗したため通常書込を継続: {e}")
         return rows, []
