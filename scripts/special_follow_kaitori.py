@@ -49,7 +49,8 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from datetime import datetime, timezone
+import urllib.parse
+from datetime import datetime, timezone, time as dt_time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # notify_dedupe は org 側（別リポジトリ）の共通部品をそのまま import する
@@ -139,6 +140,37 @@ def _current_price(product_id: str, unit: str):
     return row[0] if row else None
 
 
+def _manual_hold_today(product_id: str, unit: str):
+    """(product_id, unit) の直近kaitori行が「なつき決裁値」(source like 'natsuki%'）で
+    valid_from が JST 当日なら (True, value) を返す。それ以外は (False, None)。
+
+    2026-09-17 事故（なつき「価格下げないで」16:04）: special_follow はメインの書き手
+    src.supabase_writer._hold_same_day_manual と同じ保護を持たず、同日 15:38 に入った
+    natsuki-decision（DECK ¥13,800 / FUT ¥38,500）を毎時cronが 16:00 に計算値
+    （¥13,000 / ¥37,700）で上書きした。supabase_writer 側は
+    source=eq.{MANUAL_SOURCE}（"natsuki-decision" 完全一致）だが、DB制約側
+    （20260913000003_kaitori_manual_scope.sql 等）は source like 'natsuki%' を決裁値の
+    判定基準にしているため、こちらも natsuki_approved* 等の前綴りを含めて前綴り一致で見る。
+    """
+    since = datetime.combine(datetime.now(JST).date(), dt_time(0, 0),
+                              tzinfo=JST).astimezone(timezone.utc).isoformat()
+    try:
+        got = _rest(
+            "price_history?kind=eq.kaitori"
+            f"&product_id=eq.{product_id}&unit=eq.{unit}"
+            f"&valid_from=gte.{urllib.parse.quote(since)}"
+            "&source=like.natsuki%25"
+            "&select=value,valid_from&order=valid_from.desc&limit=1")
+    except Exception as e:
+        # 照会に失敗したら握りつぶさず、従来どおり書く（安全側は"止めない"。
+        # supabase_writer._hold_same_day_manual と同じ方針）。
+        print(f"[manual-hold] 決裁値の照会に失敗したため通常判定を継続: {e}")
+        return False, None
+    if got:
+        return True, int(got[0]["value"])
+    return False, None
+
+
 def run(apply: bool):
     sb_url, sb_key, _, _ = _conf()
     resolver = HomuraSupabaseResolver(url=sb_url, service_key=sb_key)
@@ -165,6 +197,11 @@ def run(apply: bool):
                 continue
             proposed = raw_price + MARGIN_BOX
             current = _current_price(product_id, unit)
+
+            manual_hold, manual_value = _manual_hold_today(product_id, unit)
+            if manual_hold:
+                print(f"[manual-hold] 本日のなつき決裁値を維持: {sku} ¥{manual_value:,}")
+                continue
 
             hold, inc, rate = increase_should_hold(current, proposed)
             if hold:
