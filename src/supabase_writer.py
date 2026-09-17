@@ -380,7 +380,7 @@ def write_prices(
     # ワンピの買取が9日間止まっていた（F-060）。しかも --yes 欠落で手前で止まっていたため
     # このガードにすら到達しておらず、誰も気づかなかった。
     # 現在は同じ役割を次の仕組みが担っている:
-    #   price_guard(NS≤BOX等) / price_increase_guard(5%超は保留) / price_decrease_guard(大幅値下げは保留)
+    #   price_guard(NS≤BOX等) / price_increase_guard(50%以上の急騰は保留) / price_decrease_guard(50%以上の急落は保留)
     #   / PRICE-010 Read-back(反映後に実データで確認) / kaitori_prep(公開可否の分離)
     # よって既定では要求しない。復活させる場合のみ KAITORI_OPE_REQUIRE_PROPOSAL=1。
     if (game == "onepiece" and not dry_run

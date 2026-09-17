@@ -29,7 +29,7 @@ resolve_other_item・src/supabase_resolver.HomuraSupabaseResolver）をそのま
 
 ## ガード（BOXと同じ扱い）
 
-  - 値上げ: price_increase_guard と同じ閾値（20%超は保留・Telegram通知）
+  - 値上げ: price_increase_guard と同じ閾値（2026-09-17〜 値上げは全承認・50%以上の急騰だけ保留・Telegram通知）
   - 値下げ: price_decrease_guard と同じ閾値（2026-09-16〜 値下げは全承認・50%以上の急落だけ保留・Telegram通知）
   - 差分だけ書く: src.supabase_writer._latest_kaitori_prices と同じロジックで
     「前回と同値・かつ今日(JST)書込済み」なら書かない

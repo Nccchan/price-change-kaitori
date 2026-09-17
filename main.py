@@ -147,7 +147,7 @@ def _find_previous_json(current_path: str, game: str) -> Optional[str]:
     "--approve-price-increases",
     is_flag=True,
     default=False,
-    help="承認済みの5%超値上げを保留せず反映する",
+    help="承認済みの50%以上の急騰（取得ミス疑い）を保留せず反映する",
 )
 @click.option(
     "--proposal-output",
@@ -408,7 +408,7 @@ def main(
     if decrease_holds and not approve_price_decreases:
         click.echo(f"  大幅値下げ要承認: {len(decrease_holds)}件（自動反映から除外）")
     if increase_holds and not approve_price_increases:
-        click.echo(f"  5%超値上げ要承認: {len(increase_holds)}件（自動反映から除外）")
+        click.echo(f"  50%以上の急騰要承認: {len(increase_holds)}件（自動反映から除外）")
     click.echo()
 
     if proposal_output:
@@ -542,7 +542,7 @@ def main(
         parts.append("## 大幅値下げ・要承認\n\n" + format_holds(decrease_holds))
     if increase_holds and not approve_price_increases:
         from src.price_increase_guard import format_holds as format_increase_holds
-        parts.append("## 大幅値上げ・要承認\n\n" + format_increase_holds(increase_holds))
+        parts.append("## 50%以上の急騰・要承認\n\n" + format_increase_holds(increase_holds))
     if daily_report_section:
         parts.append(daily_report_section)
     full_report = "\n\n".join(parts)

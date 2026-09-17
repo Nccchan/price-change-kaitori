@@ -3,11 +3,13 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 
-# 2026-08-14 なつき決定: 値上げ方向は自動で通す（A案）＋上限を引き上げる。
-# 5%は競合追随の通常幅（今日の保留19件は最大14%）を毎日ブロックしてしまい、
-# 承認導線が無いため永久に解消しなかった＝安すぎる買取が公開され続けた（T-131）。
-# 20%は「競合データの取り違え・桁違い」だけを止めるための天井。粗利ガードは別途効く。
-INCREASE_RATE_LIMIT = 0.20
+# 2026-08-14 なつき決定: 値上げ方向は自動で通す（A案）＋上限を引き上げる（5%→20%）。
+# 2026-09-17 なつき決定（T-131 → A・09:11）: 値上げも幅を問わず自動反映する。
+# 5%超は通常の競合追随幅を毎日ブロックし、承認導線が無いため永久に解消しなかった＝
+# 安すぎる買取が公開され続けていた。20%でも同じ理屈で日常の値上げ幅を止めてしまうため撤廃し、
+# 値下げガード（price_decrease_guard）と対称に「前回比+50%以上＝取得ミス疑い」だけを保留する。
+# 逆ざや（買取＞販売・競合最安）は price_guard 側の別ガードでこれとは独立に効く。
+INCREASE_RATE_LIMIT = 0.50
 
 
 @dataclass(frozen=True)
@@ -48,7 +50,7 @@ def evaluate_result(game: str, result) -> List[IncreaseHold]:
 def format_holds(holds: List[IncreaseHold]) -> str:
     if not holds:
         return ""
-    lines = [f"⚠️ 買取価格 大幅値上げ要承認: {len(holds)}件"]
+    lines = [f"⚠️ 買取価格 50%以上の急騰（取得ミス疑い・要確認）: {len(holds)}件"]
     for hold in holds:
         lines.append(
             f"- {hold.name} ({hold.code or '型番なし'}) {hold.unit}: "
