@@ -19,7 +19,7 @@ import urllib.error
 import urllib.request
 import urllib.parse
 import unicodedata
-from datetime import datetime, timezone, timedelta, time as dt_time
+from datetime import datetime, timezone, timedelta
 
 # ---- 認証読込（org 側 .env.local / .env から。環境変数優先）---------------------
 _ORG_ROOT = "/Users/nastuki_sever/aigive/org"
@@ -155,39 +155,93 @@ def _drop_unchanged_today(rows):
     return kept, skipped
 
 
-def _hold_same_day_manual(rows):
-    """JSTの同日中になつき決裁値がある (product_id, unit) は、再計算の書込を見送る。
+def _parse_iso(value):
+    """ISO8601文字列（Zサフィックス含む）をtz-awareなdatetimeへ。壊れていればNone。"""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
 
-    「後から書いた方が勝つ」設計自体は維持する（翌日のホムラ取得では通常ルールに戻る）。
-    ここで防ぐのは、POPや投稿に出した価格が"同じ日のうちに"黙って書き換わることだけ。
+
+def _latest_manual_or_natsuki_rows(product_ids):
+    """(product_id, unit) → 直近の manual%/natsuki% kaitori 行（value/source/valid_from/expires_at）。
+
+    T-567（2026-09-20）: 同日フィルタを外し、対象(product_id,unit)の最新1行を
+    dateに関係なく取得する。natsuki%行が前日以前でも expires_at で判定できるようにする。
+    """
+    out = {}
+    ids = [i for i in dict.fromkeys(product_ids) if i]  # 順序維持で重複除去
+    for i in range(0, len(ids), 50):
+        chunk = ",".join(ids[i:i + 50])
+        got = _rest(
+            "price_history?kind=eq.kaitori"
+            "&or=(source.like.natsuki%25,source.like.manual%25)"
+            f"&product_id=in.({chunk})"
+            "&select=product_id,unit,value,valid_from,source,expires_at"
+            "&order=valid_from.desc")
+        for row in got:
+            k = (row["product_id"], row["unit"])
+            if k not in out:  # desc なので最初が最新
+                out[k] = row
+    return out
+
+
+def _hold_same_day_manual(rows):
+    """対象 (product_id, unit) の最新 kaitori 行が、まだ有効期限内の
+    なつき決裁値(source like 'natsuki%')／一時的な手動上書き(source like 'manual%')
+    なら、再計算の書込を見送る。
+
+    2026-08-04 F-059: 元々は「同日中は触らない」だけの保護だった。
+    2026-09-20 T-567 事故: 9/19 15:08 の natsuki-decision（PKM-M1S-BOX ¥7,100・
+    expires_at=2026-09-25）が、日付が変わった 9/20 00:00 の毎時書き手に
+    ¥6,500（ホムラ+200）で上書きされた。「同日だけ」保護は翌日00:00に切れるため、
+    数日先まで有効な決裁値を守れていなかった。
+    DB側トリガー（20260913000003_kaitori_manual_scope.sql）と同じ規則をアプリ側にも入れる:
+      - natsuki%: expires_at が NULL または未来なら保護（明示指定が無ければ永続）
+      - manual%:  expires_at が無ければ valid_from+24h を既定として保護
+    expires_at を過ぎていれば保護は外れ、通常のルール計算へ戻る（＝この関数は書込を止めない）。
+    「後から書いた方が勝つ」設計自体は維持する。
     戻り値: (書き込むrows, 維持した内訳)
     """
     if not rows:
         return rows, []
-    jst_today = datetime.now(timezone(timedelta(hours=9))).date()
-    since = datetime.combine(jst_today, dt_time(0, 0),
-                             tzinfo=timezone(timedelta(hours=9))).astimezone(timezone.utc).isoformat()
     ids = sorted({r["product_id"] for r in rows})
-    manual = {}
     try:
-        for i in range(0, len(ids), 50):
-            chunk = ",".join(ids[i:i + 50])
-            got = _rest(f"price_history?kind=eq.kaitori&source=eq.{MANUAL_SOURCE}"
-                        f"&product_id=in.({chunk})&valid_from=gte.{urllib.parse.quote(since)}"
-                        f"&select=product_id,unit,value,valid_from&order=valid_from.desc")
-            for row in got:
-                manual.setdefault((row["product_id"], row["unit"]), int(row["value"]))
+        latest = _latest_manual_or_natsuki_rows(ids)
     except Exception as e:
         # 照会に失敗したら握りつぶさず、従来どおり書く（＝安全側は"止めない"）。
         print(f"[manual-hold] 決裁値の照会に失敗したため通常書込を継続: {e}")
         return rows, []
 
+    now = datetime.now(timezone.utc)
     keep, held = [], []
     for r in rows:
         k = (r["product_id"], r["unit"])
-        if k in manual and manual[k] != int(r["value"]):
+        latest_row = latest.get(k)
+        active = False
+        expires = None
+        if latest_row:
+            source = str(latest_row.get("source") or "")
+            expires = _parse_iso(latest_row.get("expires_at"))
+            if source.startswith("natsuki"):
+                # 明示指定が無ければ永続（DB側トリガーのデフォルトと同じ）。
+                active = expires is None or expires > now
+            elif source.startswith("manual"):
+                if expires is None:
+                    valid_from = _parse_iso(latest_row.get("valid_from"))
+                    expires = (valid_from + timedelta(hours=24)) if valid_from else None
+                active = expires is None or expires > now
+        if active and int(latest_row["value"]) != int(r["value"]):
             held.append({"product_id": r["product_id"], "unit": r["unit"],
-                         "manual": manual[k], "calc": int(r["value"])})
+                         "manual": int(latest_row["value"]), "calc": int(r["value"]),
+                         "expires_at": latest_row.get("expires_at")})
+            expires_label = expires.date().isoformat() if expires is not None else "なし・永続"
+            label = "natsuki 決定値" if str(latest_row.get("source") or "").startswith("natsuki") \
+                else "manual 上書き"
+            print(f"[manual-hold] {label}を保護（expires {expires_label}）: "
+                  f"{r['product_id']} {r['unit']}")
         else:
             keep.append(r)
     return keep, held
@@ -451,21 +505,24 @@ def write_prices(
             else:
                 unresolved.append(f"{code or getattr(p, 'name', '')}/{p2_unit}:{method}")
 
-    # 当日のなつき決裁値を、同じ日の再計算で消さない（2026-08-04 F-059）。
-    # なつきの方針: 手動決裁は"その日限り"。翌日のホムラ取得では通常ルール(+マージン)に戻ってよい。
-    # 困るのは「同じ日のうちに、POPや投稿に出した価格が黙って書き換わる」こと。
-    # よって JST の同日中に source='natsuki-decision' がある (product_id, unit) だけ書込をスキップする。
+    # なつき決裁値(natsuki%)・一時的な手動上書き(manual%)を、再計算で消さない
+    # （2026-08-04 F-059 / 2026-09-20 T-567 で expires_at 判定に拡張）。
+    # natsuki%は明示指定が無ければ永続、manual%は既定24hで expires_at を過ぎたら
+    # 通常ルール(+マージン)に戻ってよい。困るのは「有効期限内に、POPや投稿に出した
+    # 価格が黙って書き換わる」こと。
     rows, held = _hold_same_day_manual(rows)
     from src.collection_evidence import observe_manual_holds
     observe_manual_holds(game, held)
     if held:
-        print(f"[manual-hold] 本日のなつき決裁値を維持（再計算をスキップ）: {len(held)}件")
+        print(f"[manual-hold] 有効期限内の決裁値/手動上書きを維持（再計算をスキップ）: {len(held)}件")
         for h in held[:10]:
-            print(f"  {h['unit']} 決裁¥{h['manual']:,} を維持（計算値¥{h['calc']:,} は不採用）")
+            print(f"  {h['unit']} 決裁¥{h['manual']:,} を維持（計算値¥{h['calc']:,} は不採用・"
+                  f"expires={h.get('expires_at') or '永続'}）")
         _quality_log(f"kaitori-{game}-{now}", f"kaitori:{game}", "PRICE-012", "WARN",
                      expected={"manual": [h["manual"] for h in held[:20]]},
                      observed={"calculated": [h["calc"] for h in held[:20]]},
-                     note=f"当日のなつき決裁値を維持し再計算を見送り {len(held)}件（翌日は通常ルールに戻る）")
+                     note=f"有効期限内の決裁値/手動上書きを維持し再計算を見送り {len(held)}件"
+                          "（期限切れは通常ルールに戻る）")
 
     # T-508（2026-09-16 毎時化）: 差分だけ書く。値が前回と同じ、かつ今日(JST)既に
     # 書込済みならスキップ。値上げ5%(実装上は20%上限)ガード・準備中保護・48hルールは

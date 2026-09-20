@@ -49,8 +49,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-import urllib.parse
-from datetime import datetime, timezone, time as dt_time
+from datetime import datetime, timezone, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # notify_dedupe は org 側（別リポジトリ）の共通部品をそのまま import する
@@ -64,7 +63,10 @@ load_dotenv()
 from src.homura_fetcher import HomuraFetcher
 from src.models import GameType
 from src.supabase_resolver import HomuraSupabaseResolver
-from src.supabase_writer import _rest, _conf, _latest_kaitori_prices, JST, _notify
+from src.supabase_writer import (
+    _rest, _conf, _latest_kaitori_prices, JST, _notify,
+    _latest_manual_or_natsuki_rows, _parse_iso,
+)
 from src.price_increase_guard import should_hold as increase_should_hold
 from src.price_decrease_guard import should_hold as decrease_should_hold
 from notify_dedupe import notify_if_new  # noqa: E402
@@ -141,34 +143,54 @@ def _current_price(product_id: str, unit: str):
 
 
 def _manual_hold_today(product_id: str, unit: str):
-    """(product_id, unit) の直近kaitori行が「なつき決裁値」(source like 'natsuki%'）で
-    valid_from が JST 当日なら (True, value) を返す。それ以外は (False, None)。
+    """(product_id, unit) の最新kaitori行が、まだ有効期限内のなつき決裁値
+    (source like 'natsuki%') または一時的な手動上書き(source like 'manual%') なら
+    (True, value) を返す。期限切れ・該当なしなら (False, None)。
 
     2026-09-17 事故（なつき「価格下げないで」16:04）: special_follow はメインの書き手
     src.supabase_writer._hold_same_day_manual と同じ保護を持たず、同日 15:38 に入った
     natsuki-decision（DECK ¥13,800 / FUT ¥38,500）を毎時cronが 16:00 に計算値
-    （¥13,000 / ¥37,700）で上書きした。supabase_writer 側は
-    source=eq.{MANUAL_SOURCE}（"natsuki-decision" 完全一致）だが、DB制約側
-    （20260913000003_kaitori_manual_scope.sql 等）は source like 'natsuki%' を決裁値の
-    判定基準にしているため、こちらも natsuki_approved* 等の前綴りを含めて前綴り一致で見る。
+    （¥13,000 / ¥37,700）で上書きした。
+
+    2026-09-20 T-567 事故: 「同日中だけ」の判定は翌日00:00に切れるため、9/19 15:08 の
+    natsuki-decision（PKM-M1S-BOX ¥7,100・expires_at=2026-09-25）が 9/20 00:00 の
+    毎時書き手に計算値(ホムラ+200=¥6,500)で上書きされた。DB側トリガー
+    （20260913000003_kaitori_manual_scope.sql）と同じ規則
+    （natsuki%は明示指定が無ければ永続・manual%は既定24h）を、
+    supabase_writer._hold_same_day_manual と共通の _latest_manual_or_natsuki_rows /
+    _parse_iso を再利用して判定する（二重管理を避ける）。
     """
-    since = datetime.combine(datetime.now(JST).date(), dt_time(0, 0),
-                              tzinfo=JST).astimezone(timezone.utc).isoformat()
     try:
-        got = _rest(
-            "price_history?kind=eq.kaitori"
-            f"&product_id=eq.{product_id}&unit=eq.{unit}"
-            f"&valid_from=gte.{urllib.parse.quote(since)}"
-            "&source=like.natsuki%25"
-            "&select=value,valid_from&order=valid_from.desc&limit=1")
+        latest = _latest_manual_or_natsuki_rows([product_id])
     except Exception as e:
         # 照会に失敗したら握りつぶさず、従来どおり書く（安全側は"止めない"。
         # supabase_writer._hold_same_day_manual と同じ方針）。
         print(f"[manual-hold] 決裁値の照会に失敗したため通常判定を継続: {e}")
         return False, None
-    if got:
-        return True, int(got[0]["value"])
-    return False, None
+
+    row = latest.get((product_id, unit))
+    if not row:
+        return False, None
+
+    source = str(row.get("source") or "")
+    now = datetime.now(timezone.utc)
+    expires = _parse_iso(row.get("expires_at"))
+    if source.startswith("natsuki"):
+        active = expires is None or expires > now
+    elif source.startswith("manual"):
+        if expires is None:
+            valid_from = _parse_iso(row.get("valid_from"))
+            expires = (valid_from + timedelta(hours=24)) if valid_from else None
+        active = expires is None or expires > now
+    else:
+        active = False
+
+    if not active:
+        return False, None
+    expires_label = expires.date().isoformat() if expires is not None else "なし・永続"
+    label = "natsuki 決定値" if source.startswith("natsuki") else "manual 上書き"
+    print(f"[manual-hold] {label}を保護（expires {expires_label}）: {product_id} {unit}")
+    return True, int(row["value"])
 
 
 def run(apply: bool):
@@ -200,7 +222,7 @@ def run(apply: bool):
 
             manual_hold, manual_value = _manual_hold_today(product_id, unit)
             if manual_hold:
-                print(f"[manual-hold] 本日のなつき決裁値を維持: {sku} ¥{manual_value:,}")
+                print(f"[manual-hold] 有効期限内の決裁値/手動上書きを維持: {sku} ¥{manual_value:,}")
                 continue
 
             hold, inc, rate = increase_should_hold(current, proposed)

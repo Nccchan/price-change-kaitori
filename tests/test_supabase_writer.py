@@ -1,10 +1,13 @@
 import socket
 import unittest
 import urllib.error
+from datetime import datetime, timedelta, timezone
 from unittest import mock
 
 from src.models import UpdatePayload
-from src.supabase_writer import _rest, _resolve_by_name, _resolve_product, write_prices
+from src.supabase_writer import (
+    _hold_same_day_manual, _rest, _resolve_by_name, _resolve_product, write_prices,
+)
 
 
 ROWS = [
@@ -88,6 +91,92 @@ class RestTimeoutRetryTests(unittest.TestCase):
             with self.assertRaises(urllib.error.HTTPError):
                 _rest("price_history")
         self.assertEqual(m.call_count, 1)
+
+
+class HoldSameDayManualExpiryTests(unittest.TestCase):
+    """T-567（2026-09-20）: `_hold_same_day_manual` を「同日だけ」から
+    expires_at ベースの保護に拡張した回帰テスト。
+
+    事故: 9/19 15:08 の natsuki-decision（PKM-M1S-BOX ¥7,100・
+    expires_at=2026-09-25）が、日付が変わった 9/20 00:00 の毎時書き手に
+    計算値(ホムラ+200=¥6,500)で上書きされた。「同日だけ」保護は翌日00:00に切れるため
+    守れていなかった。
+    """
+
+    @staticmethod
+    def _row(product_id="pid-1", unit="BOX", value=7100, valid_from=None,
+             source="natsuki-decision", expires_at=None):
+        if valid_from is None:
+            valid_from = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        return {"product_id": product_id, "unit": unit, "value": value,
+                "valid_from": valid_from, "source": source, "expires_at": expires_at}
+
+    def _rows_to_write(self, product_id="pid-1", unit="BOX", value=6500):
+        return [{"product_id": product_id, "kind": "kaitori", "unit": unit,
+                 "currency": "JPY", "value": value, "source": "price-change-kaitori",
+                 "valid_from": datetime.now(timezone.utc).isoformat()}]
+
+    def test_natsuki_row_with_future_expiry_is_skipped(self):
+        """natsuki% + expires 未来 → skip。"""
+        now = datetime.now(timezone.utc)
+        latest = self._row(valid_from=(now - timedelta(days=1)).isoformat(),
+                           expires_at=(now + timedelta(days=5)).isoformat())
+        with mock.patch("src.supabase_writer._rest", return_value=[latest]):
+            kept, held = _hold_same_day_manual(self._rows_to_write())
+        self.assertEqual(kept, [])
+        self.assertEqual(len(held), 1)
+        self.assertEqual(held[0]["manual"], 7100)
+
+    def test_natsuki_row_with_past_expiry_falls_back_to_normal_rule(self):
+        """expires 過去 → 書く（通常ルールへ復帰）。"""
+        now = datetime.now(timezone.utc)
+        latest = self._row(valid_from=(now - timedelta(days=10)).isoformat(),
+                           expires_at=(now - timedelta(hours=1)).isoformat())
+        with mock.patch("src.supabase_writer._rest", return_value=[latest]):
+            kept, held = _hold_same_day_manual(self._rows_to_write())
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(held, [])
+
+    def test_manual_prefix_defaults_to_24h_hold(self):
+        """manual% は expires_at 未指定なら既定24hホールド。"""
+        now = datetime.now(timezone.utc)
+        latest = self._row(source="manual-override", value=6800,
+                           valid_from=(now - timedelta(hours=2)).isoformat())
+        with mock.patch("src.supabase_writer._rest", return_value=[latest]):
+            kept, held = _hold_same_day_manual(self._rows_to_write())
+        self.assertEqual(kept, [])
+        self.assertEqual(len(held), 1)
+        self.assertEqual(held[0]["manual"], 6800)
+
+    def test_manual_prefix_past_24h_falls_back_to_normal_rule(self):
+        now = datetime.now(timezone.utc)
+        latest = self._row(source="manual-override", value=6800,
+                           valid_from=(now - timedelta(hours=30)).isoformat())
+        with mock.patch("src.supabase_writer._rest", return_value=[latest]):
+            kept, held = _hold_same_day_manual(self._rows_to_write())
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(held, [])
+
+    def test_same_day_natsuki_row_without_explicit_expiry_is_skipped(self):
+        """当日 natsuki% → skip（expires_at 未指定＝永続のデフォルト挙動）。"""
+        now = datetime.now(timezone.utc)
+        latest = self._row(valid_from=now.isoformat(), expires_at=None)
+        with mock.patch("src.supabase_writer._rest", return_value=[latest]):
+            kept, held = _hold_same_day_manual(self._rows_to_write())
+        self.assertEqual(kept, [])
+        self.assertEqual(len(held), 1)
+
+    def test_no_matching_row_writes_normally(self):
+        with mock.patch("src.supabase_writer._rest", return_value=[]):
+            kept, held = _hold_same_day_manual(self._rows_to_write())
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(held, [])
+
+    def test_lookup_failure_does_not_block_writes(self):
+        with mock.patch("src.supabase_writer._rest", side_effect=RuntimeError("network down")):
+            kept, held = _hold_same_day_manual(self._rows_to_write())
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(held, [])
 
 
 if __name__ == "__main__":
