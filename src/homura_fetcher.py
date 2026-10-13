@@ -1,8 +1,10 @@
 """
 ほむら東京ウェブサイトからの価格自動取得モジュール
 
-kaitori-homura.com の商品ページをスクレイピングして CompetitorData を返す。
+kaitori-homura.com の公開商品API（/api/v1/products）から取得して CompetitorData を返す。
+（2026-10-13 サイトがクライアント描画化したため HTML スクレイピングから切替）
 """
+import json
 import re
 import time
 import unicodedata
@@ -10,7 +12,6 @@ from datetime import date
 from typing import Dict, List, Optional
 
 import requests
-from bs4 import BeautifulSoup
 
 from src.config import get_master_data
 from src.models import CardItem, CompetitorData, CompetitorType, GameType
@@ -20,6 +21,9 @@ from src.collection_evidence import observed_fetch, observe
 
 class HomuraFetcher:
     BASE_URL = "https://kaitori-homura.com"
+    # 2026-10-13〜 商品一覧はクライアント描画。サイトが未ログインで呼ぶ公開APIを読む。
+    API_URL = "https://api.kaitori-homura.com/api/v1/products"
+    MAX_PAGES = 50
 
     # 公開トレカカテゴリの棚卸し。mode=auto のみ標準価格更新へ流す。
     CATEGORY_REGISTRY = {
@@ -99,103 +103,104 @@ class HomuraFetcher:
         )
 
     def _fetch_category(self, category_id: int) -> List[Dict]:
-        """指定カテゴリの全ページから商品リストを取得"""
+        """指定カテゴリの全ページから商品リストを取得（公開JSON API）。
+
+        2026-10-13: ホムラがサイトを Expo(React) のクライアント描画に作り替え、
+        /products の HTML に商品が入らなくなった（h5=0件 → unverified_page_structure）。
+        サイト自身が未ログインで叩く公開API /api/v1/products を読む。
+        ページ完了の判定は meta（current_page / total_pages / total_count）で行い、
+        meta が欠ける・件数が合わない場合は terminal=False＝カテゴリ不完全のままにする。
+        """
         observe(self, "category_started", category_id, self.CATEGORY_REGISTRY.get(category_id, {}))
         results = []
+        rows_seen = 0
         page = 1
-        while True:
-            # T-508（2026-09-16 毎時化）: 1日1回から毎時に増えるため、サイトへの
-            # 負荷に配慮してページ間に1秒間隔を空ける（初回リクエストは待たない）。
+        while page <= self.MAX_PAGES:
+            # T-508（2026-09-16 毎時化）: サイトへの負荷に配慮してページ間に1秒間隔
+            # を空ける（初回リクエストは待たない）。
             if page > 1:
                 time.sleep(1)
-            url = f"{self.BASE_URL}/products"
             params = {
-                "q[product_sub_category_id_eq]": category_id,
+                "product_sub_category_id": category_id,
                 "page": page,
             }
-            resp = self.session.get(url, params=params, timeout=20)
+            resp = self.session.get(self.API_URL, params=params, timeout=20,
+                                    headers={"Accept": "application/json"})
             resp.raise_for_status()
 
-            observe(self, "page_received", f"{url}?q[product_sub_category_id_eq]={category_id}&page={page}", resp.text)
-            items = self._parse_page(resp.text)
+            observe(self, "page_received",
+                    f"{self.API_URL}?product_sub_category_id={category_id}&page={page}", resp.text)
+            items, meta, row_count = self._parse_api_page(resp.text, category_id)
+            rows_seen += row_count
             if not items:
                 observe(self, "page_finished", True)
                 break
             results.extend(items)
 
-            # 次ページリンクがなければ終了
-            soup = BeautifulSoup(resp.text, "html.parser")
-            next_link = (
-                soup.find("a", rel="next")
-                or soup.find("a", string=re.compile(r"次|next", re.I))
-                or soup.find("li", class_=re.compile(r"next"))
-            )
-            observe(self, "page_finished", not bool(next_link))
-            if not next_link:
+            total_pages = meta.get("total_pages") if meta else None
+            if not self._is_int(total_pages) or meta.get("current_page") != page:
+                # 構造が読めない＝続きの有無を証明できない。打ち切って不完全扱い。
+                observe(self, "page_finished", False)
                 break
+            if page >= total_pages:
+                terminal = meta.get("total_count") == rows_seen
+                observe(self, "page_finished", terminal)
+                break
+            observe(self, "page_finished", False)
             page += 1
 
         observe(self, "category_finished")
         return results
 
-    def _parse_page(self, html: str) -> List[Dict]:
-        """HTMLから商品情報（name, raw_code, price）を抽出。
+    @staticmethod
+    def _is_int(value) -> bool:
+        return isinstance(value, int) and not isinstance(value, bool)
 
-        実際のHTML構造:
-          <div class="flex flex-col md:flex-row ...">  ← カードコンテナ
-            <div class="flex gap-x-2 ...">
-              <a href="..."><div>画像</div></a>
-              <div>
-                <a href="..."><h5>商品名</h5></a>
-                <span>バーコード</span>
-              </div>
-            </div>
-            <div class="flex shrink-0 ...">   ← 価格エリア
-              <span>買取金額（税込）</span>
-              <span class="... font-semibold ...">10,300円</span>
-            </div>
-          </div>
+    def _parse_api_page(self, text: str, category_id: int):
+        """API応答1ページ分を (items, meta, row_count) に変換する。
+
+        応答: {"data": [{"id", "name", "price", "product_sub_category": {"id", ...}, ...}],
+               "meta": {"total_count", "total_pages", "current_page", "per_page"}}
+        価格が正の整数でない行・要求と違うサブカテゴリの行は価格を採らない
+        （候補としては記録され parse_ok=False → カテゴリ不完全）。
         """
-        soup = BeautifulSoup(html, "html.parser")
-        items = []
+        try:
+            payload = json.loads(text)
+        except ValueError:
+            payload = None
+        rows = payload.get("data") if isinstance(payload, dict) else None
+        meta = payload.get("meta") if isinstance(payload, dict) else None
+        if not isinstance(rows, list):
+            observe(self, "card_count", 0)
+            return [], None, 0
+        if not isinstance(meta, dict):
+            meta = None
 
-        cards = soup.find_all("h5")
-        observe(self, "card_count", len(cards))
-        for h5 in cards:
-            raw_name = h5.get_text(strip=True)
+        observe(self, "card_count", len(rows))
+        items = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            raw_name = row.get("name") if isinstance(row.get("name"), str) else ""
+            raw_name = raw_name.strip()
             name = self._clean_name(raw_name)
             if not name:
                 continue
-
-            # h5 → <a> → <div>(名前+コード) → <div>(gap-x-2) → カードコンテナ
-            link = h5.find_parent("a")
-            if link is None:
-                continue
-            name_div = link.parent       # <div> containing <a> and code <span>
-            gap_div = name_div.parent    # <div class="flex gap-x-2 ...">
-            card_div = gap_div.parent    # カードコンテナ（価格も含む）
-
-            # バーコード: <a>の次の<span>
-            code_span = link.find_next_sibling("span")
-            code_text = code_span.get_text(strip=True) if code_span else ""
-
-            # 価格: カードコンテナ内で "X,XXX円" パターンの<span>を探す
+            sub = row.get("product_sub_category")
+            sub_id = sub.get("id") if isinstance(sub, dict) else None
+            raw_price = row.get("price")
             price: Optional[int] = None
-            price_text = ""
-            for span in card_div.find_all("span"):
-                text = span.get_text(strip=True)
-                m = re.search(r"¥\s*([\d,]+)", text)
-                if m:
-                    price = int(m.group(1).replace(",", ""))
-                    price_text = text
-                    break
-
-            observe(self, "candidate", raw_name, name, code_text,
-                    requests.compat.urljoin(self.BASE_URL, link.get("href", "")), price, price_text)
+            if self._is_int(raw_price) and raw_price > 0 and sub_id == category_id:
+                price = raw_price
+                price_text = f"¥ {raw_price:,}"
+            else:
+                price_text = str(raw_price)
+            href = f"{self.BASE_URL}/products/{row.get('id')}"
+            # raw_code: 旧HTMLの「バーコード」欄は常に空だった。マージ挙動を変えないため空のまま。
+            observe(self, "candidate", raw_name, name, "", href, price, price_text)
             if price is not None:
-                items.append({"name": name, "raw_code": code_text, "price": price})
-
-        return items
+                items.append({"name": name, "raw_code": "", "price": price})
+        return items, meta, len(rows)
 
     def _clean_name(self, name: str) -> str:
         """商品名から余分なプレフィックス（「BOX」など）と末尾の※注釈を除去。

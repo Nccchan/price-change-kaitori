@@ -1,0 +1,79 @@
+{
+ "data": [
+  {
+   "id": 7237,
+   "name": "【BOX】30th CELEBRATION",
+   "price": 25200,
+   "promoted": true,
+   "homura_premium": false,
+   "full_price_guarantee": true,
+   "notes": "未開封/シュリンク有りのみ\r\n\r\n※不正品が発覚した場合、弊社顧問弁護士を交え徹底的な損害賠償請求と法的措置を行います。\r\n必ずご自身で正規店で購入した商品のみを買取依頼いただきますようお願い申し上げます。",
+   "jan_code": "114521329462424",
+   "shipping_only": false,
+   "requires_condition_consent": true,
+   "image_url": "https://d1a0jozt44u693.cloudfront.net/g4gyj7wc26q0ybdn9aks9rzzjyb2",
+   "capacity": null,
+   "color": null,
+   "product_sub_category": {
+    "id": 128,
+    "name": "シュリンク有り",
+    "product_category": {
+     "id": 14,
+     "name": "トレカ"
+    }
+   }
+  },
+  {
+   "id": 6933,
+   "name": "【BOX】ストームエメラルダ",
+   "price": 10300,
+   "promoted": true,
+   "homura_premium": false,
+   "full_price_guarantee": true,
+   "notes": "未開封/シュリンク有りのみ\r\n\r\n※※不正品が発覚した場合、弊社顧問弁護士を交え徹底的な損害賠償請求と法的措置を行います。\r\n必ずご自身で正規店で購入した商品のみを買取依頼いただきますようお願い申し上げます。",
+   "jan_code": "114521329462233",
+   "shipping_only": false,
+   "requires_condition_consent": true,
+   "image_url": "https://d1a0jozt44u693.cloudfront.net/kgsvuzjoeuia2rrs8xy9zitvex0a",
+   "capacity": null,
+   "color": null,
+   "product_sub_category": {
+    "id": 128,
+    "name": "シュリンク有り",
+    "product_category": {
+     "id": 14,
+     "name": "トレカ"
+    }
+   }
+  },
+  {
+   "id": 6733,
+   "name": "【BOX】アビスアイ",
+   "price": 9100,
+   "promoted": true,
+   "homura_premium": false,
+   "full_price_guarantee": true,
+   "notes": "未開封/シュリンク有りのみ\r\n\r\n※※不正品が発覚した場合、弊社顧問弁護士を交え徹底的な損害賠償請求と法的措置を行います。\r\n必ずご自身で正規店で購入した商品のみを買取依頼いただきますようお願い申し上げます。",
+   "jan_code": "114521329462127",
+   "shipping_only": false,
+   "requires_condition_consent": true,
+   "image_url": "https://d1a0jozt44u693.cloudfront.net/a1i8ip0klpm0uaozmp2bnnpc10mf",
+   "capacity": null,
+   "color": null,
+   "product_sub_category": {
+    "id": 128,
+    "name": "シュリンク有り",
+    "product_category": {
+     "id": 14,
+     "name": "トレカ"
+    }
+   }
+  }
+ ],
+ "meta": {
+  "total_count": 83,
+  "total_pages": 5,
+  "current_page": 1,
+  "per_page": 20
+ }
+}

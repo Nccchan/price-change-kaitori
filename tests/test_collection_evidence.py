@@ -16,16 +16,55 @@ from src.models import GameType, CardItem, CompetitorData, CompetitorType, Updat
 from src.price_comparator import PriceComparator
 
 
-def card(name="Alpha", code="RAW1", price="¥1,000", href="/products/1"):
+def html_card(name="Alpha", code="RAW1", price="¥1,000", href="/products/1"):
+    """Pre-2026-10-13 server-rendered markup; used only to drive the baseline collector."""
     return (f'<div class="card"><div><a href="{href}">image</a><div>'
             f'<a href="{href}"><h5>{name}</h5></a><span>{code}</span></div></div>'
             f'<div><span>{price}</span></div></div>')
 
 
-def response(html):
+def card(name="Alpha", price=1000, product_id=1, sub_id=None):
+    """One row of https://api.kaitori-homura.com/api/v1/products (2026-10-13 shape).
+
+    sub_id=None means "the sub-category that was requested" (filled in by response()).
+    """
+    return [{"id": product_id, "name": name, "price": price, "promoted": False,
+             "jan_code": "4521329000000",
+             "product_sub_category": {"id": sub_id, "name": "x",
+                                      "product_category": {"id": 14, "name": "トレカ"}}}]
+
+
+def page(rows, current_page=1, total_pages=1, total_count=None):
+    return {"data": rows, "meta": {"total_count": len(rows) if total_count is None else total_count,
+                                   "total_pages": total_pages, "current_page": current_page,
+                                   "per_page": 20}}
+
+
+def response(content, params=None):
+    params = params or {}
+    if isinstance(content, list):
+        content = page(content, current_page=params.get("page", 1))
+    if isinstance(content, dict):
+        content = json.loads(json.dumps(content))
+        for row in content.get("data") or []:
+            sub = row.get("product_sub_category")
+            if isinstance(sub, dict) and sub.get("id") is None:
+                sub["id"] = params.get("product_sub_category_id")
+        content = json.dumps(content, ensure_ascii=False)
     result = MagicMock()
-    result.text = html
+    result.text = content
     return result
+
+
+def scripted_get(pages):
+    queue = list(pages)
+
+    def get(url, params=None, **kwargs):
+        item = queue.pop(0)
+        if isinstance(item, BaseException):
+            raise item
+        return response(item, params)
+    return MagicMock(side_effect=get)
 
 
 class CollectionEvidenceTests(unittest.TestCase):
@@ -50,8 +89,7 @@ class CollectionEvidenceTests(unittest.TestCase):
 
     def fetch(self, pages, game=GameType.POKEMON):
         fetcher = HomuraFetcher()
-        fetcher.session.get = MagicMock(side_effect=[
-            p if isinstance(p, BaseException) else response(p) for p in pages])
+        fetcher.session.get = scripted_get(pages)
         with patch("src.homura_fetcher.get_master_data", return_value={"S1": "Alpha"}):
             result = fetcher.fetch(game)
         return fetcher, result
@@ -60,7 +98,7 @@ class CollectionEvidenceTests(unittest.TestCase):
         return json.loads((self.directory / f"homura-{game}{suffix}.json").read_text())
 
     def test_pokemon_box_and_ns_are_separate_explicit_units(self):
-        fetcher, result = self.fetch([card(), card(price="¥800")])
+        fetcher, result = self.fetch([card(), card(price=800)])
         artifact = self.read()
         self.assertEqual([(c["category_id"], c["external_unit"], c["complete"])
                           for c in artifact["categories"]], [(128, "BOX", True), (129, "NS", True)])
@@ -77,7 +115,7 @@ class CollectionEvidenceTests(unittest.TestCase):
         self.assertEqual([c["external_unit"] for c in artifact["categories"]], ["BOX"])
 
     def test_onepiece_carton_is_direct_category_evidence(self):
-        self.fetch([card("OP-01 Alpha"), card("OP-01 Alpha", price="¥12,000")], GameType.ONEPIECE)
+        self.fetch([card("OP-01 Alpha"), card("OP-01 Alpha", price=12000)], GameType.ONEPIECE)
         self.assertEqual([(c["external_unit"], c["observed_price"])
                           for c in self.read("onepiece")["candidates"]], [("BOX", 1000), ("CARTON", 12000)])
 
@@ -101,7 +139,7 @@ class CollectionEvidenceTests(unittest.TestCase):
         self.assertEqual(result.items[0].price_1, None)
 
     def test_malformed_card_means_incomplete_category_not_not_listed(self):
-        self.fetch([card() + card("Broken", price="ask us", href="/products/2"), card()])
+        self.fetch([card() + card("Broken", price="ask us", product_id=2), card()])
         artifact = self.read()
         self.assertFalse(artifact["categories"][0]["complete"])
         bad = next(c for c in artifact["candidates"] if c["raw_name"] == "Broken")
@@ -109,7 +147,7 @@ class CollectionEvidenceTests(unittest.TestCase):
         self.assertEqual(bad["reason_code"], "invalid_or_missing_price")
 
     def test_invalid_price_prefix_and_zero_remain_invalid_observations(self):
-        for bad in ("¥12abc", "¥0", "¥1,00", "¥1.5"):
+        for bad in ("12abc", "¥1,000", 0, -100, 1.5, True, None):
             with self.subTest(bad=bad):
                 child = self.directory / str(uuid.uuid4())
                 child.mkdir()
@@ -117,18 +155,19 @@ class CollectionEvidenceTests(unittest.TestCase):
                     _, result = self.fetch([card(price=bad), card()])
                 artifact = json.loads((child / "homura-pokemon.json").read_text())
                 self.assertFalse(artifact["candidates"][0]["parse_ok"])
-                # Existing parsing outcome is deliberately preserved.
-                self.assertIsNotNone(result.items[0].price_1)
+                self.assertFalse(artifact["categories"][0]["complete"])
+                # An invalid API price is never turned into a buy price.
+                self.assertIsNone(result.items[0].price_1)
 
     def test_duplicate_ref_is_preserved_before_existing_merge(self):
-        self.fetch([card(href="/products/1") + card(href="/products/2"), card()])
+        self.fetch([card(product_id=1) + card(product_id=2), card()])
         box = [c for c in self.read()["candidates"] if c["external_unit"] == "BOX"]
         self.assertEqual(len(box), 2)
         self.assertEqual({c["external_ref"] for c in box}, {"S1"})
 
     def test_colliding_master_names_cannot_prove_product_identity(self):
         fetcher = HomuraFetcher()
-        fetcher.session.get = MagicMock(side_effect=[response(card()), response(card())])
+        fetcher.session.get = scripted_get([card(), card()])
         with patch("src.homura_fetcher.get_master_data", return_value={"S1": "Alpha", "S2": "Alpha"}):
             result = fetcher.fetch(GameType.POKEMON)
         self.assertEqual(result.items[0].code, "S2")  # Existing merge behavior unchanged.
@@ -141,13 +180,13 @@ class CollectionEvidenceTests(unittest.TestCase):
         self.assertEqual(len([c for c in self.read()["candidates"] if c["external_unit"] == "BOX"]), 1)
 
     def test_pagination_complete_only_after_final_valid_page(self):
-        self.fetch([card() + '<a rel="next">next</a>', card(href="/products/2"), card()])
+        self.fetch([page(card(), 1, 2, 2), page(card(product_id=2), 2, 2, 2), card()])
         category = self.read()["categories"][0]
         self.assertTrue(category["complete"])
         self.assertEqual([p["terminal"] for p in category["pages"]], [False, True])
 
     def test_unresolved_candidate_prevents_definite_absence(self):
-        self.fetch([card("Renamed product", code="unknown-barcode"), card()])
+        self.fetch([card("Renamed product"), card()])
         artifact = self.read()
         self.assertFalse(artifact["categories"][0]["complete"])
         self.assertEqual(artifact["categories"][0]["reason_code"], "unresolved_candidate")
@@ -166,12 +205,12 @@ class CollectionEvidenceTests(unittest.TestCase):
     def test_no_overwrite_when_same_attempt_repeated(self):
         self.fetch([card(), card()])
         original = (self.directory / "homura-pokemon.json").read_bytes()
-        self.fetch([card(price="¥5,000"), card()])
+        self.fetch([card(price=5000), card()])
         self.assertEqual(original, (self.directory / "homura-pokemon.json").read_bytes())
 
     def test_metadata_write_failure_does_not_change_prices_or_http_calls(self):
         with patch.object(evidence, "_atomic_once", side_effect=OSError("disk full")):
-            fetcher, result = self.fetch([card(), card(price="¥800")])
+            fetcher, result = self.fetch([card(), card(price=800)])
         self.assertEqual((result.items[0].price_1, result.items[0].price_2), (1000, 800))
         self.assertEqual(fetcher.session.get.call_count, 2)
         self.assertFalse((self.directory / "homura-pokemon.json").exists())
@@ -193,7 +232,7 @@ class CollectionEvidenceTests(unittest.TestCase):
         self.assertEqual(len(result.items), 1)
 
     def test_same_value_and_actual_guard_hold_do_not_change_acquisition_success(self):
-        self.fetch([card(), card(price="¥800")])
+        self.fetch([card(), card(price=800)])
         comp = PriceComparator(custom_margins={"box": 200, "carton": 200})
         data = CompetitorData(game=GameType.POKEMON, competitor=CompetitorType.HOMURA,
                               date="2026/09/11", items=[CardItem("Alpha", "S1", 1000, 800)])
@@ -204,7 +243,7 @@ class CollectionEvidenceTests(unittest.TestCase):
                          ["same_value", "guard_hold"])
         self.assertTrue(all(c["parse_ok"] for c in self.read()["candidates"]))
 
-    def test_previous_collector_and_enabled_collector_have_identical_outputs_and_calls(self):
+    def test_previous_collector_and_api_collector_have_identical_outputs(self):
         # Execute the checked-out commit's untouched implementation offline.
         baseline_sha = "1d8aa8a697998b4389d5f91a9f35606629b109dd"
         previous = subprocess.check_output(
@@ -213,12 +252,16 @@ class CollectionEvidenceTests(unittest.TestCase):
         exec(compile(previous, "baseline_homura", "exec"), namespace)
         namespace["get_master_data"] = lambda game: {"S1": "Alpha"}
         baseline = namespace["HomuraFetcher"]()
-        pages = [card() + card(href="/products/2"), card(price="¥800")]
-        baseline.session.get = MagicMock(side_effect=[response(p) for p in pages])
+        # Same catalogue content: old HTML for the baseline, the 2026-10-13 API for current.
+        html_pages = [html_card() + html_card(href="/products/2"), html_card(price="¥800")]
+        baseline.session.get = MagicMock(side_effect=[response(p) for p in html_pages])
         old = baseline.fetch(GameType.POKEMON)
-        current, new = self.fetch(pages)
+        current, new = self.fetch([card() + card(product_id=2), card(price=800)])
         self.assertEqual(baseline.to_json(old), current.to_json(new))
-        self.assertEqual(baseline.session.get.call_args_list, current.session.get.call_args_list)
+        self.assertEqual(baseline.session.get.call_count, current.session.get.call_count)
+        self.assertEqual([(c.args[0], c.kwargs["params"]) for c in current.session.get.call_args_list],
+                         [(HomuraFetcher.API_URL, {"product_sub_category_id": 128, "page": 1}),
+                          (HomuraFetcher.API_URL, {"product_sub_category_id": 129, "page": 1})])
 
     def test_price_payloads_identical_with_observation_disabled_enabled_or_broken(self):
         self.fetch([card(), card()])
@@ -298,6 +341,57 @@ class CollectionEvidenceTests(unittest.TestCase):
                     new = supabase_writer.write_prices("pokemon", payloads)
                 self.assertEqual(old, new)
                 self.assertEqual(original_calls, calls)
+
+    # --- 2026-10-13: kaitori-homura.com became a client-rendered app -------------
+    def test_client_rendered_shell_is_unverified_not_empty(self):
+        shell = ('<!DOCTYPE html><html lang="en"><head><title data-rh="true"></title></head>'
+                 '<body><div id="root">商品一覧 対象商品：— 件</div>'
+                 '<script src="/_expo/static/js/web/entry-x.js"></script></body></html>')
+        _, result = self.fetch([shell, shell])
+        artifact = self.read()
+        self.assertEqual([c["reason_code"] for c in artifact["categories"]],
+                         ["unverified_page_structure"] * 2)
+        self.assertEqual(result.items, [])
+
+    def test_real_api_excerpt_parses_completely(self):
+        fixture = json.loads((Path(__file__).parent / "fixtures" / "homura_api_products_128_p1.json")
+                             .read_text())
+        n = len(fixture["data"])
+        last = page(card("ムニキスゼロ", 5600, 7000, 128), 2, 2, n + 1)
+        ns = page(card("30th CELEBRATION", 23000, 7238, 129))
+        _, result = self.fetch([dict(fixture, meta=dict(fixture["meta"], total_pages=2,
+                                                        total_count=n + 1)), last, ns])
+        artifact = self.read()
+        self.assertEqual([(c["category_id"], c["complete"] or c["reason_code"]) for c in artifact["categories"]],
+                         [(128, "unresolved_candidate"), (129, "unresolved_candidate")])
+        self.assertTrue(all(c["parse_ok"] for c in artifact["candidates"]))
+        box = [c for c in artifact["candidates"] if c["category_id"] == 128]
+        self.assertEqual(len(box), n + 1)
+        first = box[0]
+        self.assertEqual((first["raw_name"], first["name"], first["observed_price"], first["raw_price"]),
+                         ("【BOX】30th CELEBRATION", "30th CELEBRATION", 25200, "¥ 25,200"))
+        self.assertEqual(first["url"], "https://kaitori-homura.com/products/7237")
+        self.assertEqual(first["page_url"], HomuraFetcher.API_URL + "?product_sub_category_id=128&page=1")
+        prices = {i.name: (i.price_1, i.price_2) for i in result.items}
+        self.assertEqual(prices["30th CELEBRATION"], (25200, 23000))
+
+    def test_api_total_count_mismatch_keeps_category_incomplete(self):
+        self.fetch([page(card(), total_count=2), card()])
+        category = self.read()["categories"][0]
+        self.assertFalse(category["complete"])
+        self.assertEqual([p["terminal"] for p in category["pages"]], [False])
+
+    def test_api_missing_meta_keeps_category_incomplete_and_stops(self):
+        fetcher, _ = self.fetch([{"data": card()}, card()])
+        self.assertFalse(self.read()["categories"][0]["complete"])
+        self.assertEqual(fetcher.session.get.call_count, 2)
+
+    def test_api_row_from_other_subcategory_is_not_priced(self):
+        _, result = self.fetch([card(sub_id=129), card()])
+        artifact = self.read()
+        self.assertFalse(artifact["categories"][0]["complete"])
+        self.assertFalse(artifact["candidates"][0]["parse_ok"])
+        self.assertIsNone(result.items[0].price_1)
 
 
 if __name__ == "__main__":
