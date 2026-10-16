@@ -94,6 +94,13 @@ TARGETS = {
         "evidence_note": "2026-09-16 実測: ホムラ カテゴリ130 表示名"
                           " 'プレミアムデッキセット エーフィ・ブラッキー' で ¥14,000 を確認済み(fetch_other_raw)",
     },
+    "PKM-M6A-CARDSET-9": {
+        "homura_display_name": "30th CELEBRATION カードセット　9種セット",
+        "unit": "BOX",  # canonical_unit=BOX（sales ¥23,000 も BOX レーン。products側の実値に合わせる）
+        "note": "2026-10-17 なつき指示『カード9種類の買取準備・9種類のセットだけにする』30周年9種セット自動追従",
+        "evidence_note": "2026-10-17 実測: ホムラ カテゴリ130 表示名"
+                          " '30th CELEBRATION カードセット　9種セット' で ¥19,000 を確認済み(fetch_other_raw)",
+    },
 }
 
 
