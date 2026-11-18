@@ -155,6 +155,12 @@ def _drop_unchanged_today(rows):
     return kept, skipped
 
 
+# carton_floor_box.py が書く「カートン≥BOX×入数」の下限固定の source 名
+CARTON_FLOOR_SOURCE = "natsuki-carton-floor"
+# 床固定の解除行（carton_floor_box.py が書く。これが最新なら固定は外れている）
+CARTON_FLOOR_RELEASE_SOURCE = "rule_sync_carton_floor"
+
+
 def _parse_iso(value):
     """ISO8601文字列（Zサフィックス含む）をtz-awareなdatetimeへ。壊れていればNone。"""
     if not value:
@@ -177,7 +183,8 @@ def _latest_manual_or_natsuki_rows(product_ids):
         chunk = ",".join(ids[i:i + 50])
         got = _rest(
             "price_history?kind=eq.kaitori"
-            "&or=(source.like.natsuki%25,source.like.manual%25)"
+            "&or=(source.like.natsuki%25,source.like.manual%25,"
+            f"source.eq.{CARTON_FLOOR_RELEASE_SOURCE})"
             f"&product_id=in.({chunk})"
             "&select=product_id,unit,value,valid_from,source,expires_at"
             "&order=valid_from.desc")
@@ -225,7 +232,15 @@ def _hold_same_day_manual(rows):
         if latest_row:
             source = str(latest_row.get("source") or "")
             expires = _parse_iso(latest_row.get("expires_at"))
-            if source.startswith("natsuki"):
+            if source == CARTON_FLOOR_RELEASE_SOURCE:
+                active = False
+            elif source == CARTON_FLOOR_SOURCE and (expires is None or expires > now):
+                # 2026-11-18 OPE-EB05-CTN 事故: カートン床ジョブ(carton_floor_box.py)の固定は
+                # 「下限」であって決裁値ではない。計算値が固定値以上なら（ホムラ上昇への追従を）
+                # 止めない。固定値を下回る計算だけ保護する（床割れ防止）。以前は計算値が
+                # 違えば上下とも永続保留し、床の根拠(BOX価格)が下がった後も11日間ホムラに追従できなかった。
+                active = int(latest_row["value"]) > int(r["value"])
+            elif source.startswith("natsuki"):
                 # 明示指定が無ければ永続（DB側トリガーのデフォルトと同じ）。
                 active = expires is None or expires > now
             elif source.startswith("manual"):

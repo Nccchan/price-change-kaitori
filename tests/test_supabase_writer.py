@@ -172,6 +172,30 @@ class HoldSameDayManualExpiryTests(unittest.TestCase):
         self.assertEqual(len(kept), 1)
         self.assertEqual(held, [])
 
+    def test_carton_floor_lock_is_lower_bound_only(self):
+        """2026-11-18 OPE-EB05-CTN: natsuki-carton-floor は下限。計算値が固定値以上なら書く／未満なら保留。"""
+        now = datetime.now(timezone.utc)
+        latest = self._row(source="natsuki-carton-floor", value=144000, unit="CARTON",
+                           valid_from=(now - timedelta(days=3)).isoformat(), expires_at=None)
+        with mock.patch("src.supabase_writer._rest", return_value=[latest]):
+            kept, held = _hold_same_day_manual(self._rows_to_write(unit="CARTON", value=150000))
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(held, [])
+        with mock.patch("src.supabase_writer._rest", return_value=[latest]):
+            kept, held = _hold_same_day_manual(self._rows_to_write(unit="CARTON", value=142000))
+        self.assertEqual(kept, [])
+        self.assertEqual(len(held), 1)
+
+    def test_carton_floor_release_row_clears_lock(self):
+        """rule_sync_carton_floor（床解除行）が最新なら固定は外れている。"""
+        now = datetime.now(timezone.utc)
+        latest = self._row(source="rule_sync_carton_floor", value=162000, unit="CARTON",
+                           valid_from=now.isoformat(), expires_at=None)
+        with mock.patch("src.supabase_writer._rest", return_value=[latest]):
+            kept, held = _hold_same_day_manual(self._rows_to_write(unit="CARTON", value=142000))
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(held, [])
+
     def test_lookup_failure_does_not_block_writes(self):
         with mock.patch("src.supabase_writer._rest", side_effect=RuntimeError("network down")):
             kept, held = _hold_same_day_manual(self._rows_to_write())
