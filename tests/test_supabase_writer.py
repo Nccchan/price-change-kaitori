@@ -196,6 +196,34 @@ class HoldSameDayManualExpiryTests(unittest.TestCase):
         self.assertEqual(len(kept), 1)
         self.assertEqual(held, [])
 
+    def test_old_natsuki_row_superseded_by_later_auto_row_does_not_block(self):
+        """2026-11-18 総点検: 9/11 の natsuki-decision(永続)の後に fail_safe_rule 等の自動行が
+        書かれていれば、決裁値は上書き済み。書き手を止めない（公開89行が毎時保留されていた）。"""
+        now = datetime.now(timezone.utc)
+        natsuki = self._row(valid_from=(now - timedelta(days=60)).isoformat(), expires_at=None, value=10000)
+        newest = {"value": 10700, "valid_from": (now - timedelta(hours=3)).isoformat(),
+                  "source": "fail_safe_rule"}
+
+        def fake_rest(path, *a, **k):
+            return [newest] if "limit=1" in path and "like" not in path else [natsuki]
+        with mock.patch("src.supabase_writer._rest", side_effect=fake_rest):
+            kept, held = _hold_same_day_manual(self._rows_to_write(value=10900))
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(held, [])
+
+    def test_natsuki_row_still_newest_keeps_protection(self):
+        now = datetime.now(timezone.utc)
+        natsuki = self._row(valid_from=(now - timedelta(days=2)).isoformat(), expires_at=None, value=10000)
+        older_auto = {"value": 9000, "valid_from": (now - timedelta(days=3)).isoformat(),
+                      "source": "fail_safe_rule"}
+
+        def fake_rest(path, *a, **k):
+            return [natsuki] if "like" in path else [natsuki]
+        with mock.patch("src.supabase_writer._rest", side_effect=fake_rest):
+            kept, held = _hold_same_day_manual(self._rows_to_write(value=10900))
+        self.assertEqual(kept, [])
+        self.assertEqual(len(held), 1)
+
     def test_lookup_failure_does_not_block_writes(self):
         with mock.patch("src.supabase_writer._rest", side_effect=RuntimeError("network down")):
             kept, held = _hold_same_day_manual(self._rows_to_write())

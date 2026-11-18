@@ -195,6 +195,37 @@ def _latest_manual_or_natsuki_rows(product_ids):
     return out
 
 
+def _newest_kaitori_row(product_id, unit):
+    """(product_id, unit) の最新 kaitori 行（source/valid_from）。無ければ None。"""
+    got = _rest(
+        f"price_history?kind=eq.kaitori&product_id=eq.{product_id}&unit=eq.{unit}"
+        "&select=value,valid_from,source&order=valid_from.desc&limit=1")
+    return got[0] if got else None
+
+
+def _superseded_by_auto_row(latest_row, product_id, unit):
+    """保護対象の natsuki%/manual% 行より新しい「自動ソースの行」があれば True（＝もう最新ではない）。
+
+    2026-11-18 総点検（F-427の兄弟）: 旧実装は「natsuki%/manual% の最新行」を、その後に
+    fail_safe_rule / price-change-kaitori 等の自動行が書かれていても保護対象として扱っていた。
+    9/11 の natsuki-decision（expires なし＝永続）が残っているだけで、公開89行の再計算が
+    毎時すべて保留され、書き手が実質止まっていた（DB側 fail_safe が代わりに追従していただけ）。
+    DB側トリガー・hokusai_daily_match・manual_price_expiry と同じ「最新行が natsuki% か」で見る。
+    照会に失敗したら従来どおり保護（＝止める側）に倒す。
+    """
+    try:
+        newest = _newest_kaitori_row(product_id, unit)
+    except Exception:
+        return False
+    if not newest:
+        return False
+    nf, lf = _parse_iso(newest.get("valid_from")), _parse_iso(latest_row.get("valid_from"))
+    if not nf or not lf or nf <= lf:
+        return False
+    src = str(newest.get("source") or "")
+    return not (src.startswith("natsuki") or src.startswith("manual"))
+
+
 def _hold_same_day_manual(rows):
     """対象 (product_id, unit) の最新 kaitori 行が、まだ有効期限内の
     なつき決裁値(source like 'natsuki%')／一時的な手動上書き(source like 'manual%')
@@ -248,6 +279,10 @@ def _hold_same_day_manual(rows):
                     valid_from = _parse_iso(latest_row.get("valid_from"))
                     expires = (valid_from + timedelta(hours=24)) if valid_from else None
                 active = expires is None or expires > now
+        if active and int(latest_row["value"]) != int(r["value"]) \
+                and source != CARTON_FLOOR_RELEASE_SOURCE \
+                and _superseded_by_auto_row(latest_row, r["product_id"], r["unit"]):
+            active = False   # その後に自動行が書かれている＝決裁値は既に上書き済み
         if active and int(latest_row["value"]) != int(r["value"]):
             held.append({"product_id": r["product_id"], "unit": r["unit"],
                          "manual": int(latest_row["value"]), "calc": int(r["value"]),
