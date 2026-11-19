@@ -297,6 +297,49 @@ def _hold_same_day_manual(rows):
     return keep, held
 
 
+FAIL_SAFE_SOURCE = "fail_safe_rule"
+
+
+def _hold_rule_sourced(rows, game):
+    """最新の kaitori 行が fail_safe_rule（＝ルール採用の別ソース: シンソク等のmax式）の
+    (product_id, unit) には、ホムラ+マージンの値を書かない（2026-11-19）。
+
+    これまで price-change-kaitori が毎時ホムラ+200を書き→約1分後に fail_safe_rule が
+    ルール値へ戻す往復があり（DBZ-FB02〜08・OPE-OP11-BOX 等）、公開が毎時1分ほど誤値になる窓があった。
+    _hold_same_day_manual と同じ考え方で保留する。価格ルールの数字は変えない。
+    ポケモンは ホムラ+200 がルール本体なので対象外（fail_safe 行が一度入っても追従を止めない）。
+    照会失敗時は従来どおり書く。戻り値: (書き込むrows, 保留した内訳)
+    """
+    if not rows or game == "pokemon":
+        return rows, []
+    ids = sorted({r["product_id"] for r in rows})
+    newest = {}
+    try:
+        for i in range(0, len(ids), 50):
+            chunk = ",".join(ids[i:i + 50])
+            got = _rest("price_history?kind=eq.kaitori&product_id=in.(" + chunk + ")"
+                        "&select=product_id,unit,value,source,valid_from"
+                        "&order=valid_from.desc&limit=10000")
+            for row in got:
+                newest.setdefault((row["product_id"], row["unit"]), row)
+    except Exception as e:
+        print(f"[rule-hold] 最新行の照会に失敗したため通常書込を継続: {e}")
+        return rows, []
+    keep, held = [], []
+    for r in rows:
+        cur = newest.get((r["product_id"], r["unit"]))
+        if cur and cur.get("source") == FAIL_SAFE_SOURCE and int(cur["value"]) != int(r["value"]):
+            held.append({"product_id": r["product_id"], "unit": r["unit"],
+                         "rule": int(cur["value"]), "calc": int(r["value"])})
+        else:
+            keep.append(r)
+    if held:
+        print(f"[rule-hold] 最新がfail_safe_rule（ルール採用）のため書込を保留: {len(held)}件")
+        for h in held[:10]:
+            print(f"  {h['product_id']} {h['unit']} ルール値¥{h['rule']:,} を維持（ホムラ計算値¥{h['calc']:,} は不書込）")
+    return keep, held
+
+
 def _quality_log(run_id, target, rule_id, verdict, expected=None, observed=None,
                  evidence=None, note=None):
     """検査結果を quality_runs（追記専用）に残す。ここの失敗は本処理を止めない。"""
@@ -573,6 +616,8 @@ def write_prices(
                      observed={"calculated": [h["calc"] for h in held[:20]]},
                      note=f"有効期限内の決裁値/手動上書きを維持し再計算を見送り {len(held)}件"
                           "（期限切れは通常ルールに戻る）")
+
+    rows, _rule_held = _hold_rule_sourced(rows, game)
 
     # T-508（2026-09-16 毎時化）: 差分だけ書く。値が前回と同じ、かつ今日(JST)既に
     # 書込済みならスキップ。値上げ5%(実装上は20%上限)ガード・準備中保護・48hルールは

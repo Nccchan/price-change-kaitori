@@ -256,3 +256,29 @@ def test_resolve_by_name_does_not_cross_games():
     # onepiece の run なら従来どおり解決する
     sku, method = _resolve_product("onepiece", "", "決戦の刻", "BOX", active, product_rows)
     assert sku == "OPE-OP16-BOX" and method == "name"
+
+
+class RuleSourcedHoldTests(unittest.TestCase):
+    def _run(self, game, source, calc, rule):
+        from src.supabase_writer import _hold_rule_sourced
+        rows = [{"product_id": "p1", "unit": "BOX", "value": calc}]
+        newest = [{"product_id": "p1", "unit": "BOX", "value": rule, "source": source,
+                   "valid_from": "2026-11-19T04:00:00+00:00"}]
+        with mock.patch("src.supabase_writer._rest", return_value=newest):
+            return _hold_rule_sourced(rows, game)
+
+    def test_dragonball_latest_fail_safe_is_held(self):
+        keep, held = self._run("dragonball", "fail_safe_rule", 11700, 8600)
+        self.assertEqual((keep, len(held)), ([], 1))
+
+    def test_same_value_not_held(self):
+        keep, held = self._run("onepiece", "fail_safe_rule", 25100, 25100)
+        self.assertEqual((len(keep), held), (1, []))
+
+    def test_other_source_not_held(self):
+        keep, held = self._run("onepiece", "price-change-kaitori", 23200, 23000)
+        self.assertEqual((len(keep), held), (1, []))
+
+    def test_pokemon_never_held(self):
+        keep, held = self._run("pokemon", "fail_safe_rule", 8000, 7900)
+        self.assertEqual((len(keep), held), (1, []))
